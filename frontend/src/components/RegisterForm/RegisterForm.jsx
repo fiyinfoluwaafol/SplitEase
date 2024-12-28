@@ -1,8 +1,7 @@
 import { useState } from "react";
 import "./RegisterForm.css";
 
-function RegisterForm ({ formData, handleInputChange }) {
-    const [passwordVisible, setPasswordVisible] = useState(false);
+function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePasswordVisibilityToggle }) {
     return (
         <div>
             <form>
@@ -44,7 +43,7 @@ function RegisterForm ({ formData, handleInputChange }) {
                         value={formData.password}
                         onChange={handleInputChange}
                     />
-                    <p id="show-hide-bttn" onClick={() => setPasswordVisible(!passwordVisible)}>
+                    <p id="show-hide-bttn" onClick={handlePasswordVisibilityToggle}>
                         {passwordVisible ? 'Hide' : 'Show'}
                     </p>
                 </div>
