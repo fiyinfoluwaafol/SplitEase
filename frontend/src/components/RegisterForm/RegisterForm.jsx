@@ -2,7 +2,7 @@ import { useState } from "react";
 import "./RegisterForm.css";
 
 function RegisterForm ({ formData, handleInputChange }) {
-
+    const [passwordVisible, setPasswordVisible] = useState(false);
     return (
         <div>
             <form>
@@ -40,11 +40,13 @@ function RegisterForm ({ formData, handleInputChange }) {
                 <div className="password-div">
                     <input
                         name="password"
-                        type="password"
+                        type={passwordVisible ? "text" : "password"}
                         value={formData.password}
                         onChange={handleInputChange}
                     />
-                    <p id="show-hide-bttn">Show</p>
+                    <p id="show-hide-bttn" onClick={() => setPasswordVisible(!passwordVisible)}>
+                        {passwordVisible ? 'Hide' : 'Show'}
+                    </p>
                 </div>
                 <button>Register</button>
             </form>
