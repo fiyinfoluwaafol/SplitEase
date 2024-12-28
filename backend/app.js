@@ -15,7 +15,6 @@ app.use(express.json());
 app.use('/', require('./routes/index'));
 
 const authRoute = require('./routes/auth.js');
-
 app.use('/auth', authRoute);
 
 // Port Configuration
