@@ -17,11 +17,22 @@ const SECRET_KEY = process.env.SECRET_KEY
 router.post('/registration', async (req, res) => {
     const {firstName, lastName, email, password} = req.body;
     try {
-        const passwordHash = await bcrypt.hash(password, 10);
+        
+        // Checks to see if email already exists before creating account
+        const existingUser = await prisma.user.findFirst({
+            where: { email }
+          });
+        
+        if (existingUser){
+            return res.status(400).json({ error: 'Email already exists' });
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);   // Hashes password before storing in database
         const newUser = await prisma.user.create({
             data: {firstName, lastName, email, password: passwordHash}
         });
 
+        // Returns the newly created user data in response
         res.json({ user: newUser});
     } catch (error) {
         console.error(error);
