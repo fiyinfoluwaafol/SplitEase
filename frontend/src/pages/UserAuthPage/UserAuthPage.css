@@ -1,0 +1,22 @@
+#entire-page-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#img-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 50vw;
+    height: 100vh;
+}
+
+#form-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 50vw;
+    height: 100vh;
+}
