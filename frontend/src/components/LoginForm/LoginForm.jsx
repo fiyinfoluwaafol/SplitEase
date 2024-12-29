@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { useNavigate } from 'react-router-dom';
 import "./LoginForm.css";
 
 function LoginForm ({ email, password, handleInputChange, passwordVisible, handlePasswordVisibilityToggle }) {
+    const backendUrlAccess = import.meta.env.VITE_BACKEND_ADDRESS;
+    const navigate = useNavigate();
     return (
         <div>
             <form>
