@@ -5,6 +5,33 @@ import "./RegisterForm.css";
 function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePasswordVisibilityToggle }) {
     const backendUrlAccess = import.meta.env.VITE_BACKEND_ADDRESS;
     const navigate = useNavigate();
+
+    async function handleLogin (userObj) {
+        try {
+            const response = await fetch(`${backendUrlAccess}/auth/login`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json", // Indicate JSON body
+                },
+                body: JSON.stringify(userObj), // Send email and password in the body
+                credentials: "include", // Include cookies in the request
+            });
+
+            if (response.ok) {
+                // If login is successful, navigate to the dashboard
+                navigate("/dashboard");
+            } else {
+                // Handle errors returned by the server
+                const errorData = await response.json();
+                alert('Signup failed: ' + errorData);
+                // setErrorMessage(errorData.message || "Login failed. Please try again.");
+            }
+        } catch (error) {
+            console.error("Error during login:", error);
+            // setErrorMessage("An unexpected error occurred. Please try again later.");
+        }
+    };
+
     async function handleRegister (userObj) {
         try {
             const response = await fetch(`${backendUrlAccess}/auth/registration`, {
@@ -28,7 +55,8 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
             // updateUser(data.user);
     
             // Navigate to the DashboardPage after successful login
-            navigate('/dashboard');
+            // navigate('/dashboard');
+            handleLogin(userObj);
             } else {
                 // Handle signup failure case
                 alert('Signup failed');

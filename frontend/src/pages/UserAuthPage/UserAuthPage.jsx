@@ -31,9 +31,21 @@ function UserAuthPage () {
                         <img alt="logo"/>
                         <h1>SplitEase</h1>
                     </div>
-                    <div>
-                        <button onClick={() => setIsRegister(!isRegister)}>Register or Login Toggle Button</button>
+                    {/* Tab-Like Toggle with Smooth Transition */}
+                    <div className="toggle-container" onClick={() => setIsRegister(!isRegister)}>
+                        {/* Sliding Background */}
+                        <div
+                            className="toggle-slider"
+                            style={{
+                                transform: isRegister ? "translateX(0)" : "translateX(100%)",
+                            }}
+                        ></div>
+
+                        {/* Buttons */}
+                        <div className={`toggle-btn ${isRegister ? "active" : ""}`}>Register</div>
+                        <div className={`toggle-btn ${!isRegister ? "active" : ""}`}>Login</div>
                     </div>
+                  
                     {isRegister ? (
                         <RegisterForm 
                             formData={formData}

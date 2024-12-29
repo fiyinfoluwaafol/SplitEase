@@ -6,7 +6,8 @@ const SECRET_KEY = process.env.SECRET_KEY;
 const authenticateToken = (req, res, next) => {
     // Extract token from cookies
     const token = req.cookies?.token;
-
+    console.log('Token:', token);
+    
     if (!token) {
         return res.status(401).json({ message: 'Access denied. No token provided.' });
     }
