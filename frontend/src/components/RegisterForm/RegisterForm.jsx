@@ -1,7 +1,49 @@
 import { useState } from "react";
+import { useNavigate } from 'react-router-dom';
 import "./RegisterForm.css";
 
 function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePasswordVisibilityToggle }) {
+    const backendUrlAccess = import.meta.env.VITE_BACKEND_ADDRESS;
+    const navigate = useNavigate();
+    async function handleRegister (userObj) {
+        try {
+            const response = await fetch(`${backendUrlAccess}/auth/registration`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(userObj),
+                credentials: 'include'
+              });
+            if (response.ok) {
+            const data = await response.json();
+    
+            // Reset form fields
+            // setFirstName('');
+            // setLastName('');
+            // setEmail('');
+            // setPassword('');
+    
+            // Update the user context
+            // updateUser(data.user);
+    
+            // Navigate to the DashboardPage after successful login
+            navigate('/dashboard');
+            } else {
+                // Handle signup failure case
+                alert('Signup failed');
+            }
+        } catch (error) {
+            alert('Signup failed: ' + error);
+        }
+    }
+
+    const handleOnSubmit = async (event) => {
+        event.preventDefault();
+        // TODO: Add email validation and password validation
+        const userObj = formData;
+        handleRegister(userObj);
+    }
     return (
         <div>
             <form>
@@ -47,7 +89,7 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
                         {passwordVisible ? 'Hide' : 'Show'}
                     </p>
                 </div>
-                <button>Register</button>
+                <button onClick={(e) => handleOnSubmit(e)}>Register</button>
             </form>
 
             <p>Or Continue With</p>

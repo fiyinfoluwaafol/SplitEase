@@ -8,7 +8,7 @@ import './App.css'
 
 // Importing page components to be used for page routing
 import UserAuthPage from './pages/UserAuthPage/UserAuthPage';
-// TODO: Add DashboardPage
+import DashboardPage from './pages/DashboardPage/DashboardPage';
 import NotFoundPage from './pages/NotFoundPage/NotFoundPage';
 
 function App() {
@@ -16,6 +16,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<UserAuthPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Router>
