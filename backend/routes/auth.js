@@ -102,7 +102,11 @@ router.get('/acct-access', authenticateToken, async (req, res) => {
 
 // User Logout
 router.post('/logout', async (req, res) => {
-    res.clearCookie('token'); // Clear the token cookie
+    res.clearCookie('token', {
+        httpOnly: true, // Must match the httpOnly setting from the login endpoint
+        secure: false,  // Use 'true' in production with HTTPS
+        sameSite: 'strict',
+    });
     res.status(200).json({ message: 'Logged out successfully.' });
 });
 
