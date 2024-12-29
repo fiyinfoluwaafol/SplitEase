@@ -15,7 +15,8 @@ datasource db {
 
 model User {
   id        Int      @id @default(autoincrement()) // Primary key
-  name      String
+  firstName      String
+  lastName      String
   email     String   @unique                      // Ensure unique emails
   password  String                               // Store hashed passwords
   createdAt DateTime @default(now())             // Auto-set creation timestamp
