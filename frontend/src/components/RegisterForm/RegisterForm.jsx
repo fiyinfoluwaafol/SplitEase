@@ -123,7 +123,7 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
             <p>Or Continue With</p>
             <div id="social-icons">
                 <button>Google</button>
-                <button>Apple</button>
+                {/* <button>Apple</button> */}
                 <button>Microsoft</button>
             </div>
         </div>

@@ -27,8 +27,8 @@ function UserAuthPage () {
         <>
             <div id="entire-page-container">
                 <div id="form-container">
-                    <div>
-                        <img alt="logo"/>
+                    <div id="logo-container">
+                        <img src="/logo.jpeg" alt="logo" height={50} width={50} />
                         <h1>SplitEase</h1>
                     </div>
                     {/* Tab-Like Toggle with Smooth Transition */}
@@ -63,8 +63,8 @@ function UserAuthPage () {
                     )}
                 </div>
                 <div id="img-container">
-                    <img alt="graphic of SplitEase"/>
-                    <h3>Graphic with Catchy Tagline</h3>
+                    <img src="/graphic.jpeg" height={350} width={350} alt="graphic of SplitEase"/>
+                    <h3>Split the Costs, Ease the Process</h3>
                 </div>
             </div>
         </>
