@@ -45,17 +45,9 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
             if (response.ok) {
             const data = await response.json();
     
-            // Reset form fields
-            // setFirstName('');
-            // setLastName('');
-            // setEmail('');
-            // setPassword('');
-    
             // Update the user context
             // updateUser(data.user);
     
-            // Navigate to the DashboardPage after successful login
-            // navigate('/dashboard');
             handleLogin(userObj);
             } else {
                 // Handle signup failure case
@@ -101,6 +93,7 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
                     name="email"
                     type="email"
                     placeholder="johndoe@email.com"
+                    autoComplete="email"
                     value={formData.email}
                     onChange={handleInputChange}
                 />

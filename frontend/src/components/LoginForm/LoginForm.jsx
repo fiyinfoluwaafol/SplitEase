@@ -5,6 +5,7 @@ import "./LoginForm.css";
 function LoginForm ({ email, password, handleInputChange, passwordVisible, handlePasswordVisibilityToggle }) {
     const backendUrlAccess = import.meta.env.VITE_BACKEND_ADDRESS;
     const navigate = useNavigate();
+    const [errorMessage, setErrorMessage] = useState('');
 
     async function handleLogin (userObj) {
         try {
@@ -23,7 +24,7 @@ function LoginForm ({ email, password, handleInputChange, passwordVisible, handl
             } else {
                 // Handle errors returned by the server
                 const errorData = await response.json();
-                alert('Signup failed: ' + errorData);
+                setErrorMessage("Invalid email or password");
                 // setErrorMessage(errorData.message || "Login failed. Please try again.");
             }
         } catch (error) {
@@ -46,6 +47,7 @@ function LoginForm ({ email, password, handleInputChange, passwordVisible, handl
                     name="email"
                     type="email"
                     placeholder="johndoe@email.com"
+                    autoComplete="email"
                     value={email}
                     onChange={handleInputChange}
                 />
@@ -62,6 +64,7 @@ function LoginForm ({ email, password, handleInputChange, passwordVisible, handl
                         {passwordVisible ? 'Hide' : 'Show'}
                     </p>
                 </div>
+                {errorMessage && <p className="error-msg">{errorMessage}</p>}
                 <button onClick={(e) => handleOnSubmit(e)}>Login</button>
             </form>
 
