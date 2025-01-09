@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import "./RegisterForm.css";
 
 function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePasswordVisibilityToggle }) {
+    const [errorMessage, setErrorMessage] = useState();
     const backendUrlAccess = import.meta.env.VITE_BACKEND_ADDRESS;
     const navigate = useNavigate();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     async function handleLogin (userObj) {
         try {
@@ -23,7 +25,7 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
             } else {
                 // Handle errors returned by the server
                 const errorData = await response.json();
-                alert('Signup failed: ' + errorData);
+                alert('Login failed: ' + errorData.error);
                 // setErrorMessage(errorData.message || "Login failed. Please try again.");
             }
         } catch (error) {
@@ -51,16 +53,27 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
             handleLogin(userObj);
             } else {
                 // Handle signup failure case
-                alert('Signup failed');
+                const errorData = await response.json()
+                alert('Signup failed: ' + errorData.error);
             }
         } catch (error) {
             alert('Signup failed: ' + error);
         }
     }
 
+    const handleBlur = () => {
+        // Checks if email field is empty
+        if (!formData.email) {
+            setErrorMessage('');
+        } else if (!emailRegex.test(formData.email)) {
+            setErrorMessage('Invalid email format');
+        } else {
+            setErrorMessage('');
+        }
+    }
     const handleOnSubmit = async (event) => {
         event.preventDefault();
-        // TODO: Add email validation and password validation
+        // TODO: Add password validation
         const userObj = formData;
         handleRegister(userObj);
     }
@@ -95,8 +108,10 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
                     placeholder="johndoe@email.com"
                     autoComplete="email"
                     value={formData.email}
+                    onBlur={handleBlur}
                     onChange={handleInputChange}
                 />
+                {errorMessage && <p>{errorMessage}</p>}
 
                 <p>Password</p>
                 <div className="password-div">
@@ -110,7 +125,7 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
                         {passwordVisible ? 'Hide' : 'Show'}
                     </p>
                 </div>
-                <button onClick={(e) => handleOnSubmit(e)}>Register</button>
+                <button onClick={(e) => handleOnSubmit(e)} disabled={!!errorMessage}>Register</button>
             </form>
 
             <p>Or Continue With</p>

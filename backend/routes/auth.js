@@ -18,13 +18,17 @@ router.post('/registration', async (req, res) => {
     const {firstName, lastName, email, password} = req.body;
     try {
         
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ error: 'Invalid email format' });
+        }
         // Checks to see if email already exists before creating account
         const existingUser = await prisma.user.findFirst({
             where: { email }
           });
         
         if (existingUser){
-            return res.status(400).json({ error: 'Email already exists' });
+            return res.status(400).json({ error: 'Email already in use' });
         }
 
         const passwordHash = await bcrypt.hash(password, 10);   // Hashes password before storing in database
@@ -33,7 +37,7 @@ router.post('/registration', async (req, res) => {
         });
 
         // Returns the newly created user data in response
-        res.json({ user: newUser});
+        res.status(201).json({ message: "Account successfully created", user: { id: newUser.id, email: newUser.email } });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Server error'});
