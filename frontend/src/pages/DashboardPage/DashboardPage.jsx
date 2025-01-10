@@ -6,27 +6,27 @@ function DashboardPage () {
     const backendUrlAccess = import.meta.env.VITE_BACKEND_ADDRESS;
     const navigate = useNavigate();
 
-    // // Check if the user is authenticated when the component mounts
-    // useEffect(() => {
-    //     const checkAuth = async () => {
-    //     try {
-    //         const response = await fetch(`${backendUrlAccess}/auth/acct-access`, {
-    //         method: "GET",
-    //         credentials: "include", // Include cookies with the request
-    //         });
+    // Check if the user is authenticated when the component mounts
+    useEffect(() => {
+        const checkAuth = async () => {
+        try {
+            const response = await fetch(`${backendUrlAccess}/auth/acct-access`, {
+            method: "GET",
+            credentials: "include", // Include cookies with the request
+            });
 
-    //         if (!response.ok) {
-    //         // If not authenticated, redirect to the base route
-    //         navigate("/");
-    //         }
-    //     } catch (error) {
-    //         console.error("Error checking authentication:", error);
-    //         navigate("/"); // Redirect to the login page if an error occurs
-    //     }
-    //     };
+            if (!response.ok) {
+            // If not authenticated, redirect to the base route
+            navigate("/");
+            }
+        } catch (error) {
+            console.error("Error checking authentication:", error);
+            navigate("/"); // Redirect to the login page if an error occurs
+        }
+        };
 
-    //     checkAuth();
-    // }, [backendUrlAccess, navigate]);
+        checkAuth();
+    }, [backendUrlAccess, navigate]);
 
     const handleLogout = async () => {
         try {

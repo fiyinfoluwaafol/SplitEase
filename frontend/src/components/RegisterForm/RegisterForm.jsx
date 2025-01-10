@@ -3,9 +3,30 @@ import { useNavigate } from 'react-router-dom';
 import "./RegisterForm.css";
 
 function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePasswordVisibilityToggle }) {
+    const [errorMessage, setErrorMessage] = useState();
+    const [globalErrorMsg, setGlobalErrorMsg] = useState();
+    const [passwordRules, setPasswordRules] = useState([
+        { message: '8 characters', valid: false },
+        { message: '1 uppercase letter', valid: false },
+        { message: '1 lowercase letter', valid: false },
+        { message: '1 number', valid: false },
+        { message: '1 special character (e.g., !, @, #, etc.)', valid: false },
+    ]);
+    const [showPasswordRules, setShowPasswordRules] = useState(false);
     const backendUrlAccess = import.meta.env.VITE_BACKEND_ADDRESS;
     const navigate = useNavigate();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+    const validatePassword = (password) => {
+        const updatedRules = [
+            { message: '8 characters', valid: password.length >= 8 },
+            { message: '1 uppercase letter', valid: /[A-Z]/.test(password) },
+            { message: '1 lowercase letter', valid: /[a-z]/.test(password) },
+            { message: '1 number', valid: /[0-9]/.test(password) },
+            { message: '1 special character (e.g., !, @, #, etc.)', valid: /[!@#$%^&*(),.?":{}|<>]/.test(password) },
+        ];
+        setPasswordRules(updatedRules);
+    };
     async function handleLogin (userObj) {
         try {
             const response = await fetch(`${backendUrlAccess}/auth/login`, {
@@ -23,7 +44,7 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
             } else {
                 // Handle errors returned by the server
                 const errorData = await response.json();
-                alert('Signup failed: ' + errorData);
+                alert('Login failed: ' + errorData.error);
                 // setErrorMessage(errorData.message || "Login failed. Please try again.");
             }
         } catch (error) {
@@ -45,30 +66,32 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
             if (response.ok) {
             const data = await response.json();
     
-            // Reset form fields
-            // setFirstName('');
-            // setLastName('');
-            // setEmail('');
-            // setPassword('');
-    
             // Update the user context
             // updateUser(data.user);
     
-            // Navigate to the DashboardPage after successful login
-            // navigate('/dashboard');
             handleLogin(userObj);
             } else {
                 // Handle signup failure case
-                alert('Signup failed');
+                const errorData = await response.json()
+                setGlobalErrorMsg("Signup failed: " + errorData.error);
             }
         } catch (error) {
             alert('Signup failed: ' + error);
         }
     }
 
+    const handleBlur = () => {
+        // Checks if email field is empty
+        if (!formData.email) {
+            setErrorMessage('');
+        } else if (!emailRegex.test(formData.email)) {
+            setErrorMessage('Invalid email format');
+        } else {
+            setErrorMessage('');
+        }
+    }
     const handleOnSubmit = async (event) => {
         event.preventDefault();
-        // TODO: Add email validation and password validation
         const userObj = formData;
         handleRegister(userObj);
     }
@@ -101,9 +124,12 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
                     name="email"
                     type="email"
                     placeholder="johndoe@email.com"
+                    autoComplete="email"
                     value={formData.email}
+                    onBlur={handleBlur}
                     onChange={handleInputChange}
                 />
+                {errorMessage && <p className="error-msg">{errorMessage}</p>}
 
                 <p>Password</p>
                 <div className="password-div">
@@ -111,19 +137,38 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
                         name="password"
                         type={passwordVisible ? "text" : "password"}
                         value={formData.password}
-                        onChange={handleInputChange}
+                        onChange={
+                            (e) => {
+                                handleInputChange(e); // Update formData
+                                validatePassword(e.target.value); // Validate password
+                            }}
+                        onFocus={() => setShowPasswordRules(true)}
+                        onBlur={() => setShowPasswordRules(false)}
                     />
                     <p id="show-hide-bttn" onClick={handlePasswordVisibilityToggle}>
                         {passwordVisible ? 'Hide' : 'Show'}
                     </p>
                 </div>
-                <button onClick={(e) => handleOnSubmit(e)}>Register</button>
+                {showPasswordRules && <div>
+                    <p>Password must contain at least:</p>
+                    <ul className="password-rules">
+                        {passwordRules.map((rule, index) => (
+                            <li key={index} className={rule.valid ? 'valid' : 'invalid'}>
+                                {rule.message}
+                            </li>
+                        ))}
+                    </ul>
+                </div>}
+                {globalErrorMsg && <div className="error-msg">
+                    {globalErrorMsg}
+                </div>}
+                <button onClick={(e) => handleOnSubmit(e)} disabled={!!errorMessage}>Register</button>
             </form>
 
             <p>Or Continue With</p>
             <div id="social-icons">
                 <button>Google</button>
-                <button>Apple</button>
+                {/* <button>Apple</button> */}
                 <button>Microsoft</button>
             </div>
         </div>

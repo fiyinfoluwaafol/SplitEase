@@ -18,13 +18,17 @@ router.post('/registration', async (req, res) => {
     const {firstName, lastName, email, password} = req.body;
     try {
         
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ error: 'Invalid email format' });
+        }
         // Checks to see if email already exists before creating account
         const existingUser = await prisma.user.findFirst({
             where: { email }
           });
         
         if (existingUser){
-            return res.status(400).json({ error: 'Email already exists' });
+            return res.status(400).json({ error: 'Email already in use' });
         }
 
         const passwordHash = await bcrypt.hash(password, 10);   // Hashes password before storing in database
@@ -33,7 +37,7 @@ router.post('/registration', async (req, res) => {
         });
 
         // Returns the newly created user data in response
-        res.json({ user: newUser});
+        res.status(201).json({ message: "Account successfully created", user: { id: newUser.id, email: newUser.email } });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Server error'});
@@ -51,13 +55,13 @@ router.post('/login', async (req, res) => {
         });
 
         if (!user) {
-            return res.status(400).json({ message: 'Invalid email or password.' });
+            return res.status(400).json({ error: 'Invalid email or password' });
         }
 
         // Verify the password
         const isValidPassword = await bcrypt.compare(password, user.password);
         if (!isValidPassword) {
-            return res.status(400).json({ message: 'Invalid email or password.' });
+            return res.status(400).json({ error: 'Invalid email or password' });
         }
 
         // Generate a JWT
@@ -74,10 +78,10 @@ router.post('/login', async (req, res) => {
             sameSite: 'strict', // Protect against CSRF attacks
         });
 
-        res.status(200).json({ message: 'Login successful.' });
+        res.status(200).json({ message: 'Login successful' });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ message: 'Internal server error.' });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

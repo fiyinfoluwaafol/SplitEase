@@ -11,6 +11,13 @@
     align-items: center;
     width: 50vw;
     height: 100vh;
+    background: linear-gradient(to right, #f3f9ff, #ffffff);
+}
+
+#logo-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 #form-container {
@@ -45,7 +52,7 @@
     width: 50%;
     background-color: #1a73e8;
     border-radius: 25px;
-    transition: transform 0.3s ease; /* Smooth sliding transition */
+    transition: transform 0.7s ease; /* Smooth sliding transition */
     z-index: 0;
 }
 
@@ -58,7 +65,7 @@
     line-height: 40px; /* Vertically centers the text */
     color: #888; /* Default (inactive) text color */
     z-index: 1; /* Ensures text appears above the slider */
-    transition: color 0.3s ease; /* Smooth color transition */
+    transition: color 0.7s ease; /* Smooth color transition */
 }
 
 /* Active Button Text */
