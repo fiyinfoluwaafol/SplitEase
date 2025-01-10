@@ -4,6 +4,7 @@ import "./RegisterForm.css";
 
 function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePasswordVisibilityToggle }) {
     const [errorMessage, setErrorMessage] = useState();
+    const [globalErrorMsg, setGlobalErrorMsg] = useState();
     const [passwordRules, setPasswordRules] = useState([
         { message: '8 characters', valid: false },
         { message: '1 uppercase letter', valid: false },
@@ -72,7 +73,7 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
             } else {
                 // Handle signup failure case
                 const errorData = await response.json()
-                alert('Signup failed: ' + errorData.error);
+                setGlobalErrorMsg("Signup failed: " + errorData.error);
             }
         } catch (error) {
             alert('Signup failed: ' + error);
@@ -91,7 +92,6 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
     }
     const handleOnSubmit = async (event) => {
         event.preventDefault();
-        // TODO: Add password validation
         const userObj = formData;
         handleRegister(userObj);
     }
@@ -152,12 +152,15 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
                 {showPasswordRules && <div>
                     <p>Password must contain at least:</p>
                     <ul className="password-rules">
-            {passwordRules.map((rule, index) => (
-                <li key={index} className={rule.valid ? 'valid' : 'invalid'}>
-                    {rule.message}
-                </li>
-            ))}
-        </ul>
+                        {passwordRules.map((rule, index) => (
+                            <li key={index} className={rule.valid ? 'valid' : 'invalid'}>
+                                {rule.message}
+                            </li>
+                        ))}
+                    </ul>
+                </div>}
+                {globalErrorMsg && <div className="error-msg">
+                    {globalErrorMsg}
                 </div>}
                 <button onClick={(e) => handleOnSubmit(e)} disabled={!!errorMessage}>Register</button>
             </form>
