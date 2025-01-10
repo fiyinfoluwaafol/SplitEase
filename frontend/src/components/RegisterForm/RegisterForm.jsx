@@ -162,7 +162,7 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
                 {globalErrorMsg && <div className="error-msg">
                     {globalErrorMsg}
                 </div>}
-                <button onClick={(e) => handleOnSubmit(e)} disabled={!!errorMessage}>Register</button>
+                <button onClick={(e) => handleOnSubmit(e)} disabled={!!errorMessage || !(passwordRules.every(rule => rule.valid))}>Register</button>
             </form>
 
             <p>Or Continue With</p>
