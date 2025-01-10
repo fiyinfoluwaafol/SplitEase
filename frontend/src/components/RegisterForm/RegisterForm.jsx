@@ -4,10 +4,28 @@ import "./RegisterForm.css";
 
 function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePasswordVisibilityToggle }) {
     const [errorMessage, setErrorMessage] = useState();
+    const [passwordRules, setPasswordRules] = useState([
+        { message: '8 characters', valid: false },
+        { message: '1 uppercase letter', valid: false },
+        { message: '1 lowercase letter', valid: false },
+        { message: '1 number', valid: false },
+        { message: '1 special character (e.g., !, @, #, etc.)', valid: false },
+    ]);
+    const [showPasswordRules, setShowPasswordRules] = useState(false);
     const backendUrlAccess = import.meta.env.VITE_BACKEND_ADDRESS;
     const navigate = useNavigate();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+    const validatePassword = (password) => {
+        const updatedRules = [
+            { message: '8 characters', valid: password.length >= 8 },
+            { message: '1 uppercase letter', valid: /[A-Z]/.test(password) },
+            { message: '1 lowercase letter', valid: /[a-z]/.test(password) },
+            { message: '1 number', valid: /[0-9]/.test(password) },
+            { message: '1 special character (e.g., !, @, #, etc.)', valid: /[!@#$%^&*(),.?":{}|<>]/.test(password) },
+        ];
+        setPasswordRules(updatedRules);
+    };
     async function handleLogin (userObj) {
         try {
             const response = await fetch(`${backendUrlAccess}/auth/login`, {
@@ -111,7 +129,7 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
                     onBlur={handleBlur}
                     onChange={handleInputChange}
                 />
-                {errorMessage && <p>{errorMessage}</p>}
+                {errorMessage && <p className="error-msg">{errorMessage}</p>}
 
                 <p>Password</p>
                 <div className="password-div">
@@ -119,12 +137,28 @@ function RegisterForm ({ formData, handleInputChange, passwordVisible, handlePas
                         name="password"
                         type={passwordVisible ? "text" : "password"}
                         value={formData.password}
-                        onChange={handleInputChange}
+                        onChange={
+                            (e) => {
+                                handleInputChange(e); // Update formData
+                                validatePassword(e.target.value); // Validate password
+                            }}
+                        onFocus={() => setShowPasswordRules(true)}
+                        onBlur={() => setShowPasswordRules(false)}
                     />
                     <p id="show-hide-bttn" onClick={handlePasswordVisibilityToggle}>
                         {passwordVisible ? 'Hide' : 'Show'}
                     </p>
                 </div>
+                {showPasswordRules && <div>
+                    <p>Password must contain at least:</p>
+                    <ul className="password-rules">
+            {passwordRules.map((rule, index) => (
+                <li key={index} className={rule.valid ? 'valid' : 'invalid'}>
+                    {rule.message}
+                </li>
+            ))}
+        </ul>
+                </div>}
                 <button onClick={(e) => handleOnSubmit(e)} disabled={!!errorMessage}>Register</button>
             </form>
 

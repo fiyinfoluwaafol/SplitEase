@@ -40,3 +40,19 @@ input:focus {
     cursor: pointer;
     color: blue;
 }
+
+.password-rules {
+    margin-top: 10px;
+    padding-left: 20px;
+    list-style: none;
+    font-size: 0.9rem;
+    color: #333;
+}
+
+.password-rules .valid {
+    color: green;
+}
+
+.password-rules .invalid {
+    color: red;
+}
