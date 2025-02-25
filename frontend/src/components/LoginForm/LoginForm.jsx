@@ -67,7 +67,7 @@ function LoginForm ({ email, password, handleInputChange, passwordVisible, handl
                 {errorMessage && <p className="error-msg">{errorMessage}</p>}
                 <button onClick={(e) => handleOnSubmit(e)}>Login</button>
             </form>
-
+            <p>Forgot Password?</p>
             <p>Or Continue With</p>
             <div id="social-icons">
                 <button>Google</button>
