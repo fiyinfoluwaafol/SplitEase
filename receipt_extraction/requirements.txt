@@ -1,0 +1,15 @@
+# OCR Dependencies
+opencv-python>=4.5.5
+pytesseract>=0.3.8
+Pillow>=9.0.0
+
+# NLP Dependencies
+spacy>=3.4.0
+# You also need to run: python -m spacy download en_core_web_sm
+
+# Web API Dependencies
+flask>=2.0.2
+werkzeug>=2.0.2
+
+# Utility Dependencies
+numpy>=1.22.0 
