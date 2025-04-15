@@ -4,71 +4,67 @@ from PIL import Image
 import pytesseract
 import os
 import platform
+from advanced_preprocessor import preprocess_receipt_image
 
 # For Windows users, specify the Tesseract path
 if platform.system() == 'Windows':
     pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-def preprocess_image(image_path):
+def extract_text(image_path, save_debug_images=False):
     """
-    Preprocess the image for better OCR results
+    Extract text from the image using OCR with improved preprocessing
     
     Args:
         image_path (str): Path to the image file
-        
-    Returns:
-        numpy.ndarray: Processed image ready for OCR
-    """
-    # Load the image
-    image = cv2.imread(image_path)
-    
-    # Check if image is loaded properly
-    if image is None:
-        raise FileNotFoundError(f"Could not load image from {image_path}")
-    
-    # Convert to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    
-    # Apply thresholding to get clear black and white image
-    # Adaptive thresholding can be better for receipts with varying illumination
-    thresh = cv2.adaptiveThreshold(
-        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
-    )
-    
-    # Optional: Apply median blur to reduce noise
-    processed_image = cv2.medianBlur(thresh, 3)
-    
-    return processed_image
-
-def extract_text(image_path):
-    """
-    Extract text from the image using OCR
-    
-    Args:
-        image_path (str): Path to the image file
+        save_debug_images (bool): Whether to save debug images during preprocessing
         
     Returns:
         str: Extracted text from the image
     """
-    # Preprocess the image
-    processed_image = preprocess_image(image_path)
+    # Use the advanced preprocessing pipeline
+    processed_image = preprocess_receipt_image(image_path, save_debug_images)
     
     # Convert the OpenCV image to PIL image for pytesseract
     pil_image = Image.fromarray(processed_image)
     
-    # Extract text using pytesseract
-    # Additional config options can be added to improve results
-    # For receipts, config='--psm 6' can be useful (assumes single uniform block of text)
-    text = pytesseract.image_to_string(pil_image, config='--psm 6')
+    # Extract text using pytesseract with improved configuration
+    # Optimized configurations for receipt OCR:
+    # PSM modes:
+    # 3 = Fully automatic page segmentation, but no OSD (default)
+    # 4 = Assume a single column of text of variable sizes
+    # 6 = Assume a single uniform block of text
+    # Try different PSM modes and combine results for better accuracy
+    configs = [
+        '--psm 4 --oem 3 -c preserve_interword_spaces=1',
+        '--psm 6 --oem 3 -c preserve_interword_spaces=1',
+        '--psm 3 --oem 3 -c preserve_interword_spaces=1'
+    ]
     
-    return text
+    # Try multiple configurations and use the one with most characters extracted
+    results = []
+    for config in configs:
+        text = pytesseract.image_to_string(pil_image, config=config)
+        results.append(text)
+    
+    # Select the result with the most non-whitespace characters
+    best_result = max(results, key=lambda x: len(''.join(x.split())))
+    
+    # Alternatively, use this to combine results using all configurations
+    # This sometimes helps catch things one config misses but another catches
+    # combined_text = '\n'.join(set([line for result in results for line in result.split('\n') if line.strip()]))
+    # return combined_text
+    
+    return best_result
 
 if __name__ == "__main__":
     # Example usage
-    sample_image_path = "path/to/sample_receipt.jpg"
+    sample_image_path = "sample_receipts/receipt1.png"
     if os.path.exists(sample_image_path):
-        extracted_text = extract_text(sample_image_path)
+        # Extract text with debug images saved
+        extracted_text = extract_text(sample_image_path, save_debug_images=True)
         print("Extracted Text:")
+        print("-" * 40)
         print(extracted_text)
+        print("-" * 40)
     else:
         print(f"Sample image not found at {sample_image_path}") 
