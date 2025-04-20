@@ -1,16 +1,21 @@
-import spacy
 import re
-from spacy.matcher import Matcher
 from datetime import datetime
 
-# Load spaCy model
+# Try to import spaCy, but make it optional
 try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    # If model is not installed, suggest installing it
-    print("Spacy model 'en_core_web_sm' not found. Please install it using:")
-    print("python -m spacy download en_core_web_sm")
-    raise
+    import spacy
+    from spacy.matcher import Matcher
+    SPACY_AVAILABLE = True
+    # Load spaCy model
+    try:
+        nlp = spacy.load("en_core_web_sm")
+    except OSError:
+        # If model is not installed, fallback to rules-based extraction
+        print("Spacy model 'en_core_web_sm' not found. Using rules-based extraction only.")
+        SPACY_AVAILABLE = False
+except ImportError:
+    print("Spacy not installed. Using rules-based extraction only.")
+    SPACY_AVAILABLE = False
 
 def extract_receipt_entities(text):
     """
@@ -122,29 +127,255 @@ def extract_receipt_entities(text):
             receipt_data["payment_method"] = line
             break
     
-    # Extract items with prices (lines containing price patterns)
-    # This regex looks for patterns like "ITEM NAME    X.XX X" common in receipts
-    item_pattern = re.compile(r'^(.+?)\s+(\d+\.\d{2})\s*([A-Za-z])?$')
+    # Extract items with prices using an improved approach
+    receipt_data["items"] = extract_items_with_prices(lines)
+    
+    return receipt_data
+
+def extract_items_with_prices(lines):
+    """
+    Enhanced function to extract items and associate them with correct prices
+    using multiple approaches for better accuracy.
+    
+    Args:
+        lines (list): List of text lines from the receipt
+        
+    Returns:
+        list: List of item dictionaries with name and price
+    """
+    items = []
     
     # Skip the first few and last few lines which are typically headers and footers
     potential_item_lines = lines[5:-5] if len(lines) > 10 else lines
     
-    for line in potential_item_lines:
-        item_match = item_pattern.search(line)
-        if item_match:
-            item_name = item_match.group(1).strip()
-            item_price = float(item_match.group(2))
-            
-            # Skip if this is likely a subtotal/total/tax line
-            skip_keywords = ["total", "subtotal", "tax", "change", "cash", "credit", "payment", "amount"]
-            if not any(keyword in item_name.lower() for keyword in skip_keywords):
-                receipt_data["items"].append({
-                    "name": item_name,
-                    "price": item_price,
-                    "full_text": line
-                })
+    # Define multiple regex patterns to handle different receipt formats
+    patterns = [
+        # Pattern 1: Item name followed by price at the end of line
+        # Example: "MILK 2%                 3.99"
+        re.compile(r'^(.+?)\s{2,}(\d+\.\d{2})\s*([A-Za-z])?$'),
+        
+        # Pattern 2: Item with quantity and price
+        # Example: "EGGS   2 @ 1.99        3.98"
+        re.compile(r'^(.+?)\s+(\d+)\s*@\s*(\d+\.\d{2})\s+(\d+\.\d{2})$'),
+        
+        # Pattern 3: Item with price at the beginning
+        # Example: "$2.99  BREAD"
+        re.compile(r'^(?:\$\s*)?(\d+\.\d{2})\s{2,}(.+)$'),
+        
+        # Pattern 4: Item with quantity indicator
+        # Example: "APPLES 2.35 lb   @1.99/lb   4.68"
+        re.compile(r'^(.+?)\s+(\d+\.?\d*)\s*(?:lb|kg|oz|g)\s*@\s*(?:\$\s*)?(\d+\.?\d*)/(?:lb|kg|oz|g)\s+(\d+\.\d{2})$'),
+        
+        # Pattern 5: Line with just a price (likely a multi-line item continuation)
+        # Example: "                        10.99"
+        re.compile(r'^\s*(?:\$\s*)?(\d+\.\d{2})\s*$')
+    ]
     
-    return receipt_data
+    # Words that indicate this is not an item line
+    skip_keywords = ["total", "subtotal", "tax", "change", "cash", "credit", "payment", "amount",
+                    "balance", "due", "paid", "card", "receipt", "store", "date", "time"]
+    
+    # First pass: Clean and mark potential item lines
+    candidate_lines = []
+    
+    for idx, line in enumerate(potential_item_lines):
+        line = line.strip()
+        
+        # Skip empty or very short lines
+        if not line or len(line) < 2:
+            continue
+            
+        # Skip header/footer type lines
+        line_lower = line.lower()
+        if any(keyword in line_lower for keyword in skip_keywords):
+            continue
+        
+        # Mark line properties for easier processing
+        price_match = re.search(r'(?:\$\s*)?(\d+\.\d{2})', line)
+        price_only_match = patterns[4].search(line)
+        
+        line_info = {
+            "idx": idx,
+            "text": line,
+            "has_price": bool(price_match),
+            "price_only": bool(price_only_match),
+            "price_value": float(price_match.group(1)) if price_match else None
+        }
+        
+        candidate_lines.append(line_info)
+    
+    # Second pass: Group and process multi-line items
+    i = 0
+    while i < len(candidate_lines):
+        current = candidate_lines[i]
+        
+        # Look for multi-line items with various patterns
+        if i + 1 < len(candidate_lines):
+            next_line = candidate_lines[i+1]
+            consecutive = next_line["idx"] == current["idx"] + 1
+            
+            # Pattern A: Current line has no price, next line has only a price
+            if consecutive and not current["has_price"] and next_line["price_only"]:
+                items.append({
+                    "name": current["text"],
+                    "price": next_line["price_value"],
+                    "full_text": f"{current['text']} {next_line['text']}"
+                })
+                i += 2
+                continue
+                
+            # Pattern B: Current line has text without price, next line has additional text with price
+            if consecutive and not current["has_price"] and next_line["has_price"]:
+                # Remove price from next line to get additional description
+                next_text = next_line["text"]
+                price_str = f"{next_line['price_value']:.2f}"
+                next_text = next_text.replace('$' + price_str, '').replace(price_str, '').strip()
+                
+                # If next line has meaningful text besides the price
+                if next_text and len(next_text) > 1:
+                    items.append({
+                        "name": f"{current['text']} {next_text}",
+                        "price": next_line["price_value"],
+                        "full_text": f"{current['text']} {next_line['text']}"
+                    })
+                    i += 2
+                    continue
+                else:  # Next line has just a price with minimal text
+                    items.append({
+                        "name": current["text"],
+                        "price": next_line["price_value"],
+                        "full_text": f"{current['text']} {next_line['text']}"
+                    })
+                    i += 2
+                    continue
+            
+            # Pattern C: Current line has a complete item with price, skip it for individual processing
+        
+        # Process single line items
+        matched = False
+        
+        # Skip standalone price-only lines
+        if current["price_only"]:
+            i += 1
+            continue
+            
+        # Try each standard pattern for single-line items
+        for pattern_idx, pattern in enumerate(patterns[:4]):
+            match = pattern.search(current["text"])
+            if match:
+                matched = True
+                if pattern_idx == 0:  # Standard item with price at end
+                    item_name = match.group(1).strip()
+                    item_price = float(match.group(2))
+                    items.append({"name": item_name, "price": item_price, "full_text": current["text"]})
+                elif pattern_idx == 1:  # Item with quantity
+                    item_name = match.group(1).strip()
+                    item_price = float(match.group(4))  # Total price
+                    items.append({"name": item_name, "price": item_price, "full_text": current["text"]})
+                elif pattern_idx == 2:  # Price at beginning
+                    item_name = match.group(2).strip()
+                    item_price = float(match.group(1))
+                    items.append({"name": item_name, "price": item_price, "full_text": current["text"]})
+                elif pattern_idx == 3:  # Weight-based item
+                    item_name = match.group(1).strip()
+                    item_price = float(match.group(4))
+                    items.append({"name": item_name, "price": item_price, "full_text": current["text"]})
+                break
+        
+        # Generic fallback for lines with a price that didn't match specific patterns
+        if not matched and current["has_price"]:
+            # Extract the price and the remaining text
+            price_match = re.search(r'(?:\$\s*)?(\d+\.\d{2})', current["text"])
+            price_str = price_match.group(1)
+            
+            try:
+                price = float(price_str)
+                # Remove the price from the line to get the item name
+                item_text = current["text"].replace('$' + price_str, '').replace(price_str, '').strip()
+                # Only add if the remaining text isn't too short (avoid fragments)
+                if len(item_text) > 2:
+                    items.append({"name": item_text, "price": price, "full_text": current["text"]})
+            except ValueError:
+                pass
+                
+        i += 1
+    
+    # Post-processing to unify multi-line items that are part of the same entry
+    # This is useful for receipts with blank lines between related items
+    processed_items = []
+    i = 0
+    
+    while i < len(items):
+        current_item = items[i]
+        
+        # If this isn't the last item and the next item seems part of a sequence
+        if i + 1 < len(items) and similar_item_names(current_item["name"], items[i+1]["name"]):
+            combined_item = {
+                "name": f"{current_item['name']} {items[i+1]['name']}",
+                "price": max(current_item["price"], items[i+1]["price"]),
+                "full_text": f"{current_item['full_text']} + {items[i+1]['full_text']}"
+            }
+            processed_items.append(combined_item)
+            i += 2
+        else:
+            processed_items.append(current_item)
+            i += 1
+            
+    return processed_items
+
+def similar_item_names(name1, name2):
+    """
+    Check if two item names are likely part of the same item.
+    
+    Args:
+        name1 (str): First item name
+        name2 (str): Second item name
+        
+    Returns:
+        bool: True if names are likely related, False otherwise
+    """
+    # If this is clearly a multi-line item where the first line has no price info
+    if "@" in name1 or "@" in name2:
+        # Don't combine quantity-based items with others
+        return False
+        
+    # If one name is very short and the other has multiple words
+    if len(name1.split()) <= 2 and len(name2.split()) > 3:
+        # Might be a size/variant indicator for the main item
+        return True
+        
+    # If names have very different lengths, probably not the same item
+    if abs(len(name1.split()) - len(name2.split())) > 2:
+        return False
+        
+    # If both names are very short, don't combine unless one may be a modifier
+    if len(name1.split()) <= 2 and len(name2.split()) <= 2:
+        # Check for size/color/variant keywords
+        size_keywords = ['size', 'small', 'medium', 'large', 'xl', 'xxl']
+        color_keywords = ['red', 'blue', 'green', 'black', 'white', 'yellow']
+        
+        name1_lower = name1.lower()
+        name2_lower = name2.lower()
+        
+        has_size = any(word in name1_lower for word in size_keywords) or any(word in name2_lower for word in size_keywords)
+        has_color = any(word in name1_lower for word in color_keywords) or any(word in name2_lower for word in color_keywords)
+        
+        return has_size or has_color
+    
+    # If the names share specific common words, they might be related
+    words1 = set(w.lower() for w in name1.split())
+    words2 = set(w.lower() for w in name2.split())
+    
+    # Ignore common filler words
+    ignored_words = {'a', 'an', 'the', 'with', 'and', 'or', 'for'}
+    words1 = words1 - ignored_words
+    words2 = words2 - ignored_words
+    
+    common_words = words1.intersection(words2)
+    
+    # Items must share a significant portion of words to be considered related
+    # And have at least one common word
+    return len(common_words) >= 1 and len(common_words) >= min(len(words1), len(words2)) // 2
 
 if __name__ == "__main__":
     # Example usage
