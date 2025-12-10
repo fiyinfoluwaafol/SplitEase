@@ -1,81 +1,188 @@
 import { useState } from "react";
-import { useNavigate } from 'react-router-dom';
-import "./LoginForm.css";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Eye, EyeOff, Mail, Lock, Loader2 } from "lucide-react";
 
-function LoginForm ({ email, password, handleInputChange, passwordVisible, handlePasswordVisibilityToggle }) {
-    const backendUrlAccess = import.meta.env.VITE_BACKEND_ADDRESS;
-    const navigate = useNavigate();
-    const [errorMessage, setErrorMessage] = useState('');
+function LoginForm({ email, password, handleInputChange }) {
+  const backendUrlAccess = import.meta.env.VITE_BACKEND_ADDRESS;
+  const navigate = useNavigate();
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
-    async function handleLogin (userObj) {
-        try {
-            const response = await fetch(`${backendUrlAccess}/auth/login`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json", // Indicate JSON body
-                },
-                body: JSON.stringify(userObj), // Send email and password in the body
-                credentials: "include", // Include cookies in the request
-            });
+  async function handleLogin(userObj) {
+    setIsLoading(true);
+    setErrorMessage("");
+    try {
+      const response = await fetch(`${backendUrlAccess}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(userObj),
+        credentials: "include",
+      });
 
-            if (response.ok) {
-                // If login is successful, navigate to the dashboard
-                navigate("/dashboard");
-            } else {
-                // Handle errors returned by the server
-                const errorData = await response.json();
-                setErrorMessage("Invalid email or password");
-                // setErrorMessage(errorData.message || "Login failed. Please try again.");
-            }
-        } catch (error) {
-            console.error("Error during login:", error);
-            // setErrorMessage("An unexpected error occurred. Please try again later.");
-        }
-    };
-
-    const handleOnSubmit = async (event) => {
-        event.preventDefault();
-        // TODO: Add email validation and password validation
-        const userObj = { email, password };
-        handleLogin(userObj);
+      if (response.ok) {
+        navigate("/dashboard");
+      } else {
+        const errorData = await response.json();
+        setErrorMessage(errorData.error || "Invalid email or password");
+      }
+    } catch (error) {
+      console.error("Error during login:", error);
+      setErrorMessage("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
-    return (
-        <div>
-            <form>
-                <p>Email Address</p>
-                <input
-                    name="email"
-                    type="email"
-                    placeholder="johndoe@email.com"
-                    autoComplete="email"
-                    value={email}
-                    onChange={handleInputChange}
-                />
+  }
 
-                <p>Password</p>
-                <div className="password-div">
-                    <input
-                        name="password"
-                        type={passwordVisible ? "text" : "password"}
-                        value={password}
-                        onChange={handleInputChange}
-                    />
-                    <p id="show-hide-bttn" onClick={handlePasswordVisibilityToggle}>
-                        {passwordVisible ? 'Hide' : 'Show'}
-                    </p>
-                </div>
-                {errorMessage && <p className="error-msg">{errorMessage}</p>}
-                <button onClick={(e) => handleOnSubmit(e)}>Login</button>
-            </form>
-            <p>Forgot Password?</p>
-            <p>Or Continue With</p>
-            <div id="social-icons">
-                <button>Google</button>
-                <button>Apple</button>
-                <button>Microsoft</button>
-            </div>
+  const handleOnSubmit = async (event) => {
+    event.preventDefault();
+    const userObj = { email, password };
+    handleLogin(userObj);
+  };
+
+  const handleSocialLogin = (provider) => {
+    console.log(`Logging in with ${provider}`);
+    // TODO: Implement social login
+  };
+
+  return (
+    <form onSubmit={handleOnSubmit} className="space-y-4">
+      {/* Email Field */}
+      <div className="space-y-2">
+        <Label htmlFor="login-email">Email Address</Label>
+        <div className="relative">
+          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            id="login-email"
+            name="email"
+            type="email"
+            placeholder="johndoe@email.com"
+            autoComplete="email"
+            value={email}
+            onChange={handleInputChange}
+            className="pl-10"
+            required
+          />
         </div>
-    )
+      </div>
+
+      {/* Password Field */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="login-password">Password</Label>
+          <Button
+            type="button"
+            variant="link"
+            className="px-0 h-auto text-xs text-primary"
+          >
+            Forgot Password?
+          </Button>
+        </div>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            id="login-password"
+            name="password"
+            type={passwordVisible ? "text" : "password"}
+            value={password}
+            onChange={handleInputChange}
+            className="pl-10 pr-10"
+            required
+          />
+          <button
+            type="button"
+            onClick={() => setPasswordVisible(!passwordVisible)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            {passwordVisible ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="p-3 rounded-md bg-red-50 border border-red-200">
+          <p className="text-sm text-red-600">{errorMessage}</p>
+        </div>
+      )}
+
+      {/* Submit Button */}
+      <Button type="submit" className="w-full" disabled={isLoading}>
+        {isLoading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Signing in...
+          </>
+        ) : (
+          "Sign In"
+        )}
+      </Button>
+
+      {/* Social Login Divider */}
+      <div className="relative my-6">
+        <div className="absolute inset-0 flex items-center">
+          <Separator />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-white px-2 text-gray-500">Or continue with</span>
+        </div>
+      </div>
+
+      {/* Social Login Buttons */}
+      <div className="grid grid-cols-2 gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => handleSocialLogin("google")}
+          className="w-full"
+        >
+          <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+            <path
+              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              fill="#4285F4"
+            />
+            <path
+              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              fill="#34A853"
+            />
+            <path
+              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+              fill="#FBBC05"
+            />
+            <path
+              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              fill="#EA4335"
+            />
+          </svg>
+          Google
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => handleSocialLogin("microsoft")}
+          className="w-full"
+        >
+          <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+            <path fill="#F25022" d="M1 1h10v10H1z" />
+            <path fill="#00A4EF" d="M1 13h10v10H1z" />
+            <path fill="#7FBA00" d="M13 1h10v10H13z" />
+            <path fill="#FFB900" d="M13 13h10v10H13z" />
+          </svg>
+          Microsoft
+        </Button>
+      </div>
+    </form>
+  );
 }
 
 export default LoginForm;

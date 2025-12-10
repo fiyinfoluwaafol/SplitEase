@@ -1,14 +1,13 @@
-import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-
-// TODO: Replace with Logo and Graphic for Right half of UserAuthPage
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
 
-// Importing page components to be used for page routing
+// Importing page components
 import UserAuthPage from './pages/UserAuthPage/UserAuthPage';
 import DashboardPage from './pages/DashboardPage/DashboardPage';
+import GroupsPage from './pages/GroupsPage/GroupsPage';
+import GroupDetailPage from './pages/GroupDetailPage/GroupDetailPage';
+import ExpensesPage from './pages/ExpensesPage/ExpensesPage';
+import SettlePage from './pages/SettlePage/SettlePage';
 import NotFoundPage from './pages/NotFoundPage/NotFoundPage';
 
 function App() {
@@ -17,6 +16,10 @@ function App() {
       <Routes>
         <Route path="/" element={<UserAuthPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/groups" element={<GroupsPage />} />
+        <Route path="/groups/:id" element={<GroupDetailPage />} />
+        <Route path="/expenses" element={<ExpensesPage />} />
+        <Route path="/settle" element={<SettlePage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Router>
