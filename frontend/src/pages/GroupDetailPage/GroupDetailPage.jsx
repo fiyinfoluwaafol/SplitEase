@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import Layout from "@/components/Layout/Layout";
 import {
@@ -38,19 +38,16 @@ import {
   Users,
   Settings,
 } from "lucide-react";
-import {
-  getGroupById,
-  getUserById,
-  getExpensesByGroup,
-  getCategoryById,
-  categories,
-} from "@/data/mockData";
+import { groupsAPI, expensesAPI, balancesAPI, categories, getCategoryById } from "@/lib/api";
 import { useUser } from "@/contexts/UserContext";
 
 function GroupDetailPage() {
   const { user } = useUser();
   const { id } = useParams();
-  const group = getGroupById(id);
+  const [group, setGroup] = useState(null);
+  const [expenses, setExpenses] = useState([]);
+  const [balances, setBalances] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [inviteMemberOpen, setInviteMemberOpen] = useState(false);
   const [newExpense, setNewExpense] = useState({
@@ -59,6 +56,40 @@ function GroupDetailPage() {
     category: "",
   });
   const [inviteEmail, setInviteEmail] = useState("");
+
+  useEffect(() => {
+    const fetchGroupData = async () => {
+      if (!id || !user) return;
+      
+      try {
+        setLoading(true);
+        const [groupRes, expensesRes, balancesRes] = await Promise.all([
+          groupsAPI.getById(id),
+          expensesAPI.getAll(id),
+          balancesAPI.getByGroup(id),
+        ]);
+        setGroup(groupRes.group);
+        setExpenses(expensesRes.expenses || []);
+        setBalances(balancesRes.balances);
+      } catch (error) {
+        console.error("Error fetching group data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGroupData();
+  }, [id, user]);
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center py-12">
+          <p className="text-gray-500">Loading...</p>
+        </div>
+      </Layout>
+    );
+  }
 
   if (!group) {
     return (
@@ -78,9 +109,8 @@ function GroupDetailPage() {
     );
   }
 
-  const memberUsers = group.members.map(getUserById).filter(Boolean);
-  const expenses = getExpensesByGroup(group.id);
-  const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const memberUsers = (group.members || []).map((m) => m.user || m).filter(Boolean);
+  const totalSpent = parseFloat(group.totalExpenses || 0);
 
   const getInitials = (name) => {
     return name
@@ -105,45 +135,80 @@ function GroupDetailPage() {
     });
   };
 
-  // Calculate balance per member
+  // Calculate balance per member from expenses
   const calculateMemberBalances = () => {
-    const balances = {};
+    const memberBalancesMap = {};
     memberUsers.forEach((member) => {
-      balances[member.id] = { paid: 0, owes: 0 };
+      memberBalancesMap[member.id] = { paid: 0, owes: 0 };
     });
 
     expenses.forEach((expense) => {
-      const share = expense.amount / expense.splitBetween.length;
-      if (balances[expense.paidBy]) {
-        balances[expense.paidBy].paid += expense.amount;
+      const shareCount = expense.shares?.length || 1;
+      const shareAmount = parseFloat(expense.amount) / shareCount;
+      const paidById = typeof expense.paidBy === 'object' ? expense.paidBy.id : expense.paidBy;
+      
+      if (memberBalancesMap[paidById]) {
+        memberBalancesMap[paidById].paid += parseFloat(expense.amount);
       }
-      expense.splitBetween.forEach((userId) => {
-        if (balances[userId]) {
-          balances[userId].owes += share;
+      
+      expense.shares?.forEach((share) => {
+        const userId = share.userId || share.user?.id;
+        if (memberBalancesMap[userId]) {
+          memberBalancesMap[userId].owes += parseFloat(share.shareAmount || shareAmount);
         }
       });
     });
 
     return memberUsers.map((member) => ({
       ...member,
-      paid: balances[member.id]?.paid || 0,
-      owes: balances[member.id]?.owes || 0,
-      balance: (balances[member.id]?.paid || 0) - (balances[member.id]?.owes || 0),
+      paid: memberBalancesMap[member.id]?.paid || 0,
+      owes: memberBalancesMap[member.id]?.owes || 0,
+      balance: (memberBalancesMap[member.id]?.paid || 0) - (memberBalancesMap[member.id]?.owes || 0),
     }));
   };
 
   const memberBalances = calculateMemberBalances();
 
-  const handleAddExpense = () => {
-    console.log("Adding expense:", newExpense);
-    setAddExpenseOpen(false);
-    setNewExpense({ description: "", amount: "", category: "" });
+  const handleAddExpense = async () => {
+    if (!newExpense.description || !newExpense.amount) return;
+
+    try {
+      const memberIds = memberUsers.map((m) => m.id);
+      await expensesAPI.create({
+        description: newExpense.description,
+        amount: parseFloat(newExpense.amount),
+        category: newExpense.category || "other",
+        groupId: parseInt(id),
+        splitBetween: memberIds,
+        splitType: "equal",
+      });
+
+      // Refresh expenses
+      const expensesRes = await expensesAPI.getAll(id);
+      setExpenses(expensesRes.expenses || []);
+      
+      setAddExpenseOpen(false);
+      setNewExpense({ description: "", amount: "", category: "" });
+    } catch (error) {
+      console.error("Error adding expense:", error);
+      alert(error.message || "Failed to add expense");
+    }
   };
 
-  const handleInviteMember = () => {
-    console.log("Inviting member:", inviteEmail);
-    setInviteMemberOpen(false);
-    setInviteEmail("");
+  const handleInviteMember = async () => {
+    if (!inviteEmail.trim()) return;
+
+    try {
+      await groupsAPI.addMember(id, inviteEmail);
+      // Refresh group data
+      const groupRes = await groupsAPI.getById(id);
+      setGroup(groupRes.group);
+      setInviteMemberOpen(false);
+      setInviteEmail("");
+    } catch (error) {
+      console.error("Error inviting member:", error);
+      alert(error.message || "Failed to invite member");
+    }
   };
 
   return (
@@ -345,8 +410,12 @@ function GroupDetailPage() {
                 {expenses.length > 0 ? (
                   <div className="space-y-4">
                     {expenses.map((expense) => {
-                      const payer = getUserById(expense.paidBy);
+                      const payer = expense.payer || expense.paidBy;
+                      const payerName = payer?.firstName 
+                        ? `${payer.firstName} ${payer.lastName || ""}`.trim()
+                        : payer?.name || "Unknown";
                       const category = getCategoryById(expense.category);
+                      const shareCount = expense.shares?.length || 1;
                       return (
                         <div
                           key={expense.id}
@@ -360,15 +429,15 @@ function GroupDetailPage() {
                               {expense.description}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {payer?.name} paid • {formatDate(expense.date)}
+                              {payerName} paid • {formatDate(expense.date || expense.createdAt)}
                             </p>
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-semibold">
-                              {formatCurrency(expense.amount)}
+                              {formatCurrency(parseFloat(expense.amount))}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {formatCurrency(expense.amount / expense.splitBetween.length)}/person
+                              {formatCurrency(parseFloat(expense.amount) / shareCount)}/person
                             </p>
                           </div>
                           {expense.settled ? (
@@ -409,27 +478,34 @@ function GroupDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {memberUsers.map((member) => (
-                    <div
-                      key={member.id}
-                      className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50"
-                    >
-                      <Avatar className="h-10 w-10">
-                        <AvatarFallback className="bg-primary/10 text-primary">
-                          {getInitials(member.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">
-                          {member.name}
-                          {user && member.id === user.id && (
-                            <span className="text-gray-500 ml-1">(You)</span>
-                          )}
-                        </p>
-                        <p className="text-xs text-gray-500">{member.email}</p>
+                  {memberUsers.map((member) => {
+                    const memberName = member.firstName 
+                      ? `${member.firstName} ${member.lastName || ""}`.trim()
+                      : member.name || "Unknown";
+                    const memberId = member.id;
+                    const isCurrentUser = user && memberId === parseInt(user.id);
+                    return (
+                      <div
+                        key={memberId}
+                        className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50"
+                      >
+                        <Avatar className="h-10 w-10">
+                          <AvatarFallback className="bg-primary/10 text-primary">
+                            {getInitials(memberName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900">
+                            {memberName}
+                            {isCurrentUser && (
+                              <span className="text-gray-500 ml-1">(You)</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-gray-500">{member.email}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -446,42 +522,47 @@ function GroupDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {memberBalances.map((member) => (
-                    <div
-                      key={member.id}
-                      className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50"
-                    >
-                      <Avatar className="h-10 w-10">
-                        <AvatarFallback className="bg-primary/10 text-primary">
-                          {getInitials(member.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">
-                          {member.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Paid {formatCurrency(member.paid)} • Owes{" "}
-                          {formatCurrency(member.owes)}
-                        </p>
+                  {memberBalances.map((member) => {
+                    const memberName = member.firstName 
+                      ? `${member.firstName} ${member.lastName || ""}`.trim()
+                      : member.name || "Unknown";
+                    return (
+                      <div
+                        key={member.id}
+                        className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50"
+                      >
+                        <Avatar className="h-10 w-10">
+                          <AvatarFallback className="bg-primary/10 text-primary">
+                            {getInitials(memberName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900">
+                            {memberName}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Paid {formatCurrency(member.paid)} • Owes{" "}
+                            {formatCurrency(member.owes)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p
+                            className={`text-sm font-semibold ${
+                              member.balance >= 0
+                                ? "text-green-600"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {member.balance >= 0 ? "+" : ""}
+                            {formatCurrency(member.balance)}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {member.balance >= 0 ? "is owed" : "owes"}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p
-                          className={`text-sm font-semibold ${
-                            member.balance >= 0
-                              ? "text-green-600"
-                              : "text-red-600"
-                          }`}
-                        >
-                          {member.balance >= 0 ? "+" : ""}
-                          {formatCurrency(member.balance)}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {member.balance >= 0 ? "is owed" : "owes"}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

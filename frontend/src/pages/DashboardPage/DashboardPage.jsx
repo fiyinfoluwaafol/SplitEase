@@ -25,13 +25,7 @@ import {
   Receipt,
   ArrowRight,
 } from "lucide-react";
-import {
-  groups,
-  calculateBalances,
-  getRecentActivity,
-  getUserById,
-  getCategoryById,
-} from "@/data/mockData";
+import { groupsAPI, expensesAPI, paymentsAPI, balancesAPI, getCategoryById } from "@/lib/api";
 import { useUser } from "@/contexts/UserContext";
 
 function DashboardPage() {
@@ -39,12 +33,11 @@ function DashboardPage() {
   const navigate = useNavigate();
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
-  const { user } = useUser();
-
-  const balances = calculateBalances(user);
-  const recentActivity = getRecentActivity(5);
-
-  const { refreshUser } = useUser();
+  const [groups, setGroups] = useState([]);
+  const [balances, setBalances] = useState({ youOwe: 0, youAreOwed: 0, totalBalance: 0 });
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { user, refreshUser } = useUser();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -57,7 +50,6 @@ function DashboardPage() {
         if (!response.ok) {
           navigate("/");
         } else {
-          // Refresh user data after successful auth check
           refreshUser();
         }
       } catch (error) {
@@ -68,6 +60,64 @@ function DashboardPage() {
 
     checkAuth();
   }, [backendUrlAccess, navigate, refreshUser]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        
+        // Fetch groups, balances, expenses, and payments in parallel
+        const [groupsRes, balancesRes, expensesRes, paymentsRes] = await Promise.all([
+          groupsAPI.getAll(),
+          balancesAPI.getOverall(),
+          expensesAPI.getAll(),
+          paymentsAPI.getAll(),
+        ]);
+
+        setGroups(groupsRes.groups || []);
+        setBalances(balancesRes.balances || { youOwe: 0, youAreOwed: 0, totalBalance: 0 });
+
+        // Combine expenses and payments for recent activity
+        const expenses = expensesRes.expenses || [];
+        const payments = paymentsRes.payments || [];
+        
+        const activity = [
+          ...expenses.slice(0, 5).map((e) => ({
+            type: "expense",
+            data: {
+              ...e,
+              paidBy: e.paidBy || e.payer?.id,
+              splitBetween: e.shares?.map((s) => s.userId) || [],
+              date: e.date || e.createdAt,
+            },
+            date: new Date(e.date || e.createdAt),
+          })),
+          ...payments.slice(0, 5).map((p) => ({
+            type: "payment",
+            data: {
+              ...p,
+              from: p.fromUserId || p.from?.id,
+              to: p.toUserId || p.to?.id,
+              date: p.date || p.createdAt,
+            },
+            date: new Date(p.date || p.createdAt),
+          })),
+        ]
+          .sort((a, b) => b.date - a.date)
+          .slice(0, 5);
+
+        setRecentActivity(activity);
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user]);
 
   const getInitials = (name) => {
     return name
@@ -91,12 +141,18 @@ function DashboardPage() {
     });
   };
 
-  const handleCreateGroup = () => {
-    // Mock creating a group
-    console.log("Creating group:", newGroupName);
-    setCreateGroupOpen(false);
-    setNewGroupName("");
-    // In real app, this would call an API
+  const handleCreateGroup = async () => {
+    if (!newGroupName.trim()) return;
+
+    try {
+      const result = await groupsAPI.create({ name: newGroupName });
+      setGroups((prev) => [result.group, ...prev]);
+      setCreateGroupOpen(false);
+      setNewGroupName("");
+    } catch (error) {
+      console.error("Error creating group:", error);
+      alert(error.message || "Failed to create group");
+    }
   };
 
   return (
@@ -166,19 +222,25 @@ function DashboardPage() {
               <Wallet className="w-4 h-4 text-gray-400" />
             </CardHeader>
             <CardContent>
-              <div
-                className={`text-2xl font-bold ${
-                  balances.totalBalance >= 0 ? "text-green-600" : "text-red-600"
-                }`}
-              >
-                {balances.totalBalance >= 0 ? "+" : ""}
-                {formatCurrency(balances.totalBalance)}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                {balances.totalBalance >= 0
-                  ? "You're owed overall"
-                  : "You owe overall"}
-              </p>
+              {loading ? (
+                <div className="text-2xl font-bold text-gray-400">...</div>
+              ) : (
+                <>
+                  <div
+                    className={`text-2xl font-bold ${
+                      balances.totalBalance >= 0 ? "text-green-600" : "text-red-600"
+                    }`}
+                  >
+                    {balances.totalBalance >= 0 ? "+" : ""}
+                    {formatCurrency(balances.totalBalance)}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {balances.totalBalance >= 0
+                      ? "You're owed overall"
+                      : "You owe overall"}
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -190,10 +252,16 @@ function DashboardPage() {
               <TrendingDown className="w-4 h-4 text-red-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">
-                {formatCurrency(balances.youOwe)}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">To other members</p>
+              {loading ? (
+                <div className="text-2xl font-bold text-gray-400">...</div>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-red-600">
+                    {formatCurrency(balances.youOwe)}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">To other members</p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -205,10 +273,16 @@ function DashboardPage() {
               <TrendingUp className="w-4 h-4 text-green-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {formatCurrency(balances.youAreOwed)}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">From other members</p>
+              {loading ? (
+                <div className="text-2xl font-bold text-gray-400">...</div>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-green-600">
+                    {formatCurrency(balances.youAreOwed)}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">From other members</p>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -232,11 +306,17 @@ function DashboardPage() {
                   {recentActivity.map((activity, index) => {
                     if (activity.type === "expense") {
                       const expense = activity.data;
-                      const payer = getUserById(expense.paidBy);
+                      const payer = expense.payer || expense.paidBy;
+                      const payerName = payer?.firstName 
+                        ? `${payer.firstName} ${payer.lastName || ""}`.trim()
+                        : payer?.name || "Unknown";
                       const category = getCategoryById(expense.category);
+                      const paidById = typeof payer === 'object' ? payer.id : payer;
+                      const isUserPaid = user && paidById === parseInt(user.id);
+                      
                       return (
                         <div
-                          key={`exp-${index}`}
+                          key={`exp-${expense.id || index}`}
                           className="flex items-center gap-4"
                         >
                           <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-lg">
@@ -247,20 +327,20 @@ function DashboardPage() {
                               {expense.description}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {payer?.name} paid • {formatDate(expense.date)}
+                              {payerName} paid • {formatDate(expense.date)}
                             </p>
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-semibold text-gray-900">
-                              {formatCurrency(expense.amount)}
+                              {formatCurrency(parseFloat(expense.amount))}
                             </p>
-                            {user && expense.paidBy === user.id ? (
+                            {isUserPaid ? (
                               <Badge variant="success" className="text-xs">
                                 You paid
                               </Badge>
                             ) : (
                               <Badge variant="secondary" className="text-xs">
-                                {payer?.name.split(" ")[0]} paid
+                                {payerName.split(" ")[0]} paid
                               </Badge>
                             )}
                           </div>
@@ -268,11 +348,18 @@ function DashboardPage() {
                       );
                     } else {
                       const payment = activity.data;
-                      const from = getUserById(payment.from);
-                      const to = getUserById(payment.to);
+                      const from = payment.from || payment.fromUserId;
+                      const to = payment.to || payment.toUserId;
+                      const fromName = from?.firstName 
+                        ? `${from.firstName} ${from.lastName || ""}`.trim()
+                        : from?.name || "Unknown";
+                      const toName = to?.firstName 
+                        ? `${to.firstName} ${to.lastName || ""}`.trim()
+                        : to?.name || "Unknown";
+                      
                       return (
                         <div
-                          key={`pay-${index}`}
+                          key={`pay-${payment.id || index}`}
                           className="flex items-center gap-4"
                         >
                           <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
@@ -280,15 +367,15 @@ function DashboardPage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900 truncate">
-                              {from?.name} paid {to?.name}
+                              {fromName} paid {toName}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {payment.note} • {formatDate(payment.date)}
+                              {payment.note || "Payment"} • {formatDate(payment.date)}
                             </p>
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-semibold text-green-600">
-                              {formatCurrency(payment.amount)}
+                              {formatCurrency(parseFloat(payment.amount))}
                             </p>
                             <Badge variant="success" className="text-xs">
                               Payment
@@ -320,12 +407,14 @@ function DashboardPage() {
               </Button>
             </CardHeader>
             <CardContent>
-              {groups.length > 0 ? (
+              {loading ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">Loading...</p>
+                </div>
+              ) : groups.length > 0 ? (
                 <div className="space-y-4">
                   {groups.slice(0, 4).map((group) => {
-                    const memberUsers = group.members
-                      .map(getUserById)
-                      .filter(Boolean);
+                    const memberUsers = (group.members || []).map((m) => m.user || m).filter(Boolean);
                     return (
                       <Link
                         key={group.id}
@@ -340,20 +429,25 @@ function DashboardPage() {
                             {group.name}
                           </p>
                           <p className="text-xs text-gray-500">
-                            {group.members.length} members
+                            {memberUsers.length} members
                           </p>
                         </div>
                         <div className="flex -space-x-2">
-                          {memberUsers.slice(0, 3).map((member) => (
-                            <Avatar
-                              key={member.id}
-                              className="h-7 w-7 border-2 border-white"
-                            >
-                              <AvatarFallback className="text-xs bg-gray-200">
-                                {getInitials(member.name)}
-                              </AvatarFallback>
-                            </Avatar>
-                          ))}
+                          {memberUsers.slice(0, 3).map((member) => {
+                            const memberName = member.firstName 
+                              ? `${member.firstName} ${member.lastName || ""}`.trim()
+                              : member.name || "Unknown";
+                            return (
+                              <Avatar
+                                key={member.id}
+                                className="h-7 w-7 border-2 border-white"
+                              >
+                                <AvatarFallback className="text-xs bg-gray-200">
+                                  {getInitials(memberName)}
+                                </AvatarFallback>
+                              </Avatar>
+                            );
+                          })}
                           {memberUsers.length > 3 && (
                             <div className="h-7 w-7 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center">
                               <span className="text-xs text-gray-600">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Layout from "@/components/Layout/Layout";
 import {
   Card,
@@ -29,13 +29,7 @@ import {
   DollarSign,
   History,
 } from "lucide-react";
-import {
-  calculateBalances,
-  getDetailedBalances,
-  payments,
-  getUserById,
-  getGroupById,
-} from "@/data/mockData";
+import { balancesAPI, paymentsAPI } from "@/lib/api";
 import { useUser } from "@/contexts/UserContext";
 
 function SettlePage() {
@@ -44,9 +38,33 @@ function SettlePage() {
   const [selectedBalance, setSelectedBalance] = useState(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
+  const [balances, setBalances] = useState({ youOwe: 0, youAreOwed: 0, totalBalance: 0 });
+  const [detailedBalances, setDetailedBalances] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const balances = calculateBalances(user);
-  const detailedBalances = getDetailedBalances(user);
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        const [balancesRes, paymentsRes] = await Promise.all([
+          balancesAPI.getOverall(),
+          paymentsAPI.getAll(),
+        ]);
+        setBalances(balancesRes.balances || { youOwe: 0, youAreOwed: 0, totalBalance: 0 });
+        setDetailedBalances(balancesRes.balances?.detailed || []);
+        setPayments(paymentsRes.payments || []);
+      } catch (error) {
+        console.error("Error fetching settle data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user]);
 
   const getInitials = (name) => {
     return name
@@ -78,16 +96,34 @@ function SettlePage() {
     setSettleOpen(true);
   };
 
-  const handleRecordPayment = () => {
-    console.log("Recording payment:", {
-      to: selectedBalance.user,
-      amount: paymentAmount,
-      note: paymentNote,
-    });
-    setSettleOpen(false);
-    setSelectedBalance(null);
-    setPaymentAmount("");
-    setPaymentNote("");
+  const handleRecordPayment = async () => {
+    if (!selectedBalance || !paymentAmount) return;
+
+    try {
+      const toUserId = selectedBalance.user?.id || selectedBalance.userId;
+      await paymentsAPI.create({
+        toUserId: parseInt(toUserId),
+        amount: parseFloat(paymentAmount),
+        note: paymentNote || undefined,
+      });
+
+      // Refresh data
+      const [balancesRes, paymentsRes] = await Promise.all([
+        balancesAPI.getOverall(),
+        paymentsAPI.getAll(),
+      ]);
+      setBalances(balancesRes.balances || { youOwe: 0, youAreOwed: 0, totalBalance: 0 });
+      setDetailedBalances(balancesRes.balances?.detailed || []);
+      setPayments(paymentsRes.payments || []);
+
+      setSettleOpen(false);
+      setSelectedBalance(null);
+      setPaymentAmount("");
+      setPaymentNote("");
+    } catch (error) {
+      console.error("Error recording payment:", error);
+      alert(error.message || "Failed to record payment");
+    }
   };
 
   // Separate who you owe vs who owes you
@@ -191,39 +227,49 @@ function SettlePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {youOwe.length > 0 ? (
+                {loading ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">Loading...</p>
+                  </div>
+                ) : youOwe.length > 0 ? (
                   <div className="space-y-3">
-                    {youOwe.map((balance) => (
-                      <div
-                        key={balance.user.id}
-                        className="flex items-center gap-4 p-4 rounded-lg bg-red-50 border border-red-100"
-                      >
-                        <Avatar className="h-12 w-12">
-                          <AvatarFallback className="bg-red-100 text-red-700">
-                            {getInitials(balance.user.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">
-                            {balance.user.name}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {balance.user.email}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-red-600">
-                            {formatCurrency(balance.amount)}
-                          </p>
-                        </div>
-                        <Button
-                          onClick={() => handleOpenSettle(balance)}
-                          className="shrink-0"
+                    {youOwe.map((balance) => {
+                      const balanceUser = balance.user;
+                      const userName = balanceUser?.firstName 
+                        ? `${balanceUser.firstName} ${balanceUser.lastName || ""}`.trim()
+                        : balanceUser?.name || "Unknown";
+                      return (
+                        <div
+                          key={balanceUser?.id || balance.userId}
+                          className="flex items-center gap-4 p-4 rounded-lg bg-red-50 border border-red-100"
                         >
-                          Settle Up
-                        </Button>
-                      </div>
-                    ))}
+                          <Avatar className="h-12 w-12">
+                            <AvatarFallback className="bg-red-100 text-red-700">
+                              {getInitials(userName)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900">
+                              {userName}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {balanceUser?.email || ""}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-red-600">
+                              {formatCurrency(Math.abs(balance.amount))}
+                            </p>
+                          </div>
+                          <Button
+                            onClick={() => handleOpenSettle(balance)}
+                            className="shrink-0"
+                          >
+                            Settle Up
+                          </Button>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-8">
@@ -246,36 +292,46 @@ function SettlePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {owedToYou.length > 0 ? (
+                {loading ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">Loading...</p>
+                  </div>
+                ) : owedToYou.length > 0 ? (
                   <div className="space-y-3">
-                    {owedToYou.map((balance) => (
-                      <div
-                        key={balance.user.id}
-                        className="flex items-center gap-4 p-4 rounded-lg bg-green-50 border border-green-100"
-                      >
-                        <Avatar className="h-12 w-12">
-                          <AvatarFallback className="bg-green-100 text-green-700">
-                            {getInitials(balance.user.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">
-                            {balance.user.name}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {balance.user.email}
-                          </p>
+                    {owedToYou.map((balance) => {
+                      const balanceUser = balance.user;
+                      const userName = balanceUser?.firstName 
+                        ? `${balanceUser.firstName} ${balanceUser.lastName || ""}`.trim()
+                        : balanceUser?.name || "Unknown";
+                      return (
+                        <div
+                          key={balanceUser?.id || balance.userId}
+                          className="flex items-center gap-4 p-4 rounded-lg bg-green-50 border border-green-100"
+                        >
+                          <Avatar className="h-12 w-12">
+                            <AvatarFallback className="bg-green-100 text-green-700">
+                              {getInitials(userName)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900">
+                              {userName}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {balanceUser?.email || ""}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-green-600">
+                              {formatCurrency(balance.amount)}
+                            </p>
+                          </div>
+                          <Button variant="outline" className="shrink-0">
+                            Remind
+                          </Button>
                         </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-green-600">
-                            {formatCurrency(balance.amount)}
-                          </p>
-                        </div>
-                        <Button variant="outline" className="shrink-0">
-                          Remind
-                        </Button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-8">
@@ -297,13 +353,25 @@ function SettlePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {payments.length > 0 ? (
+                {loading ? (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500">Loading...</p>
+                  </div>
+                ) : payments.length > 0 ? (
                   <div className="space-y-4">
                     {payments.map((payment) => {
-                      const from = getUserById(payment.from);
-                      const to = getUserById(payment.to);
-                      const group = getGroupById(payment.groupId);
-                      const isFromCurrentUser = user && payment.from === user.id;
+                      const from = payment.from || payment.fromUserId;
+                      const to = payment.to || payment.toUserId;
+                      const fromName = from?.firstName 
+                        ? `${from.firstName} ${from.lastName || ""}`.trim()
+                        : from?.name || "Unknown";
+                      const toName = to?.firstName 
+                        ? `${to.firstName} ${to.lastName || ""}`.trim()
+                        : to?.name || "Unknown";
+                      const fromId = typeof from === 'object' ? from.id : from;
+                      const toId = typeof to === 'object' ? to.id : to;
+                      const isFromCurrentUser = user && fromId === parseInt(user.id);
+                      const isToCurrentUser = user && toId === parseInt(user.id);
 
                       return (
                         <div
@@ -313,36 +381,40 @@ function SettlePage() {
                           <div className="flex items-center gap-2">
                             <Avatar className="h-9 w-9">
                               <AvatarFallback className="text-xs">
-                                {getInitials(from?.name || "")}
+                                {getInitials(fromName)}
                               </AvatarFallback>
                             </Avatar>
                             <ArrowRight className="w-4 h-4 text-gray-400" />
                             <Avatar className="h-9 w-9">
                               <AvatarFallback className="text-xs">
-                                {getInitials(to?.name || "")}
+                                {getInitials(toName)}
                               </AvatarFallback>
                             </Avatar>
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900">
-                              {isFromCurrentUser ? "You" : from?.name} paid{" "}
-                              {user && payment.to === user.id ? "you" : to?.name}
+                              {isFromCurrentUser ? "You" : fromName} paid{" "}
+                              {isToCurrentUser ? "you" : toName}
                             </p>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-xs text-gray-500">
-                                {payment.note}
-                              </span>
-                              {group && (
+                              {payment.note && (
                                 <>
-                                  <span className="text-xs text-gray-300">•</span>
                                   <span className="text-xs text-gray-500">
-                                    {group.name}
+                                    {payment.note}
                                   </span>
+                                  <span className="text-xs text-gray-300">•</span>
                                 </>
                               )}
-                              <span className="text-xs text-gray-300">•</span>
+                              {payment.group && (
+                                <>
+                                  <span className="text-xs text-gray-500">
+                                    {payment.group.name}
+                                  </span>
+                                  <span className="text-xs text-gray-300">•</span>
+                                </>
+                              )}
                               <span className="text-xs text-gray-500">
-                                {formatDate(payment.date)}
+                                {formatDate(payment.date || payment.createdAt)}
                               </span>
                             </div>
                           </div>
@@ -355,7 +427,7 @@ function SettlePage() {
                               }`}
                             >
                               {isFromCurrentUser ? "-" : "+"}
-                              {formatCurrency(payment.amount)}
+                              {formatCurrency(parseFloat(payment.amount))}
                             </p>
                           </div>
                           <Badge variant="success">
@@ -383,7 +455,9 @@ function SettlePage() {
             <DialogHeader>
               <DialogTitle>Record Payment</DialogTitle>
               <DialogDescription>
-                Record a payment to {selectedBalance?.user?.name}
+                Record a payment to {selectedBalance?.user?.firstName 
+                  ? `${selectedBalance.user.firstName} ${selectedBalance.user.lastName || ""}`.trim()
+                  : selectedBalance?.user?.name || "this person"}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -396,16 +470,21 @@ function SettlePage() {
                 <ArrowRight className="w-5 h-5 text-gray-400" />
                 <Avatar className="h-12 w-12">
                   <AvatarFallback className="bg-primary/10 text-primary">
-                    {selectedBalance?.user &&
-                      getInitials(selectedBalance.user.name)}
+                    {selectedBalance?.user && getInitials(
+                      selectedBalance.user.firstName 
+                        ? `${selectedBalance.user.firstName} ${selectedBalance.user.lastName || ""}`.trim()
+                        : selectedBalance.user.name || "Unknown"
+                    )}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
                   <p className="text-sm font-medium">
-                    You → {selectedBalance?.user?.name}
+                    You → {selectedBalance?.user?.firstName 
+                      ? `${selectedBalance.user.firstName} ${selectedBalance.user.lastName || ""}`.trim()
+                      : selectedBalance?.user?.name || "Unknown"}
                   </p>
                   <p className="text-xs text-gray-500">
-                    Total owed: {selectedBalance && formatCurrency(selectedBalance.amount)}
+                    Total owed: {selectedBalance && formatCurrency(Math.abs(selectedBalance.amount))}
                   </p>
                 </div>
               </div>

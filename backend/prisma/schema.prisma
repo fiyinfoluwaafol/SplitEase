@@ -14,11 +14,86 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement()) // Primary key
-  firstName      String
+  id            Int            @id @default(autoincrement())
+  firstName     String
   lastName      String
-  email     String   @unique                      // Ensure unique emails
-  password  String                               // Store hashed passwords
-  createdAt DateTime @default(now())             // Auto-set creation timestamp
-  updatedAt DateTime @updatedAt                  // Auto-update on changes
+  email         String         @unique
+  password      String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // Relations
+  createdGroups Group[]        @relation("GroupCreator")
+  memberships   GroupMember[]
+  paidExpenses  Expense[]      @relation("ExpensePayer")
+  expenseShares ExpenseShare[]
+  paymentsSent  Payment[]      @relation("PaymentFrom")
+  paymentsReceived Payment[]   @relation("PaymentTo")
+}
+
+model Group {
+  id          Int           @id @default(autoincrement())
+  name        String
+  description String?
+  createdBy   Int
+  creator     User          @relation("GroupCreator", fields: [createdBy], references: [id])
+  members     GroupMember[]
+  expenses    Expense[]
+  payments    Payment[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model GroupMember {
+  id       Int      @id @default(autoincrement())
+  groupId  Int
+  userId   Int
+  role     String   @default("member") // "admin" | "member"
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt DateTime @default(now())
+
+  @@unique([groupId, userId])
+}
+
+model Expense {
+  id          Int            @id @default(autoincrement())
+  description String
+  amount      Decimal        @db.Decimal(10, 2)
+  category    String         @default("other")
+  groupId     Int
+  paidBy      Int
+  splitType   String         @default("equal") // "equal" | "custom"
+  settled     Boolean        @default(false)
+  group       Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  payer       User           @relation("ExpensePayer", fields: [paidBy], references: [id])
+  shares      ExpenseShare[]
+  date        DateTime       @default(now())
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model ExpenseShare {
+  id          Int     @id @default(autoincrement())
+  expenseId   Int
+  userId      Int
+  shareAmount Decimal @db.Decimal(10, 2)
+  expense     Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user        User    @relation(fields: [userId], references: [id])
+
+  @@unique([expenseId, userId])
+}
+
+model Payment {
+  id         Int      @id @default(autoincrement())
+  fromUserId Int
+  toUserId   Int
+  amount     Decimal  @db.Decimal(10, 2)
+  note       String?
+  groupId    Int?
+  from       User     @relation("PaymentFrom", fields: [fromUserId], references: [id])
+  to         User     @relation("PaymentTo", fields: [toUserId], references: [id])
+  group      Group?   @relation(fields: [groupId], references: [id])
+  date       DateTime @default(now())
+  createdAt  DateTime @default(now())
 }

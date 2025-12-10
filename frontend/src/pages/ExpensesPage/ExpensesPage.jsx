@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import Layout from "@/components/Layout/Layout";
 import {
@@ -44,14 +44,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  expenses,
-  groups,
-  categories,
-  getUserById,
-  getGroupById,
-  getCategoryById,
-} from "@/data/mockData";
+import { expensesAPI, groupsAPI, categories, getCategoryById } from "@/lib/api";
 import { useUser } from "@/contexts/UserContext";
 
 function ExpensesPage() {
@@ -60,6 +53,9 @@ function ExpensesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterGroup, setFilterGroup] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [expenses, setExpenses] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [newExpense, setNewExpense] = useState({
     description: "",
     amount: "",
@@ -82,12 +78,34 @@ function ExpensesPage() {
     });
   };
 
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        const [expensesRes, groupsRes] = await Promise.all([
+          expensesAPI.getAll(),
+          groupsAPI.getAll(),
+        ]);
+        setExpenses(expensesRes.expenses || []);
+        setGroups(groupsRes.groups || []);
+      } catch (error) {
+        console.error("Error fetching expenses:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user]);
+
   // Filter expenses
   const filteredExpenses = expenses.filter((expense) => {
     const matchesSearch = expense.description
       .toLowerCase()
       .includes(searchQuery.toLowerCase());
-    const matchesGroup = filterGroup === "all" || expense.groupId === filterGroup;
+    const matchesGroup = filterGroup === "all" || expense.groupId === parseInt(filterGroup);
     const matchesCategory =
       filterCategory === "all" || expense.category === filterCategory;
     return matchesSearch && matchesGroup && matchesCategory;
@@ -98,32 +116,74 @@ function ExpensesPage() {
   const settledExpenses = filteredExpenses.filter((e) => e.settled);
 
   // Calculate totals
-  const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalSpent = expenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
   const yourShare = expenses.reduce((sum, e) => {
-    if (user && e.splitBetween.includes(user.id)) {
-      return sum + e.amount / e.splitBetween.length;
+    if (user && e.shares) {
+      const userShare = e.shares.find((s) => s.userId === parseInt(user.id));
+      if (userShare) {
+        return sum + parseFloat(userShare.shareAmount || 0);
+      }
     }
     return sum;
   }, 0);
 
-  const handleAddExpense = () => {
-    console.log("Adding expense:", newExpense);
-    setAddExpenseOpen(false);
-    setNewExpense({ description: "", amount: "", category: "", groupId: "" });
+  const handleAddExpense = async () => {
+    if (!newExpense.description || !newExpense.amount || !newExpense.groupId) return;
+
+    try {
+      // Get group members for splitBetween
+      const group = groups.find((g) => g.id === parseInt(newExpense.groupId));
+      const memberIds = (group?.members || []).map((m) => m.userId || m.user?.id || m.id);
+
+      await expensesAPI.create({
+        description: newExpense.description,
+        amount: parseFloat(newExpense.amount),
+        category: newExpense.category || "other",
+        groupId: parseInt(newExpense.groupId),
+        splitBetween: memberIds,
+        splitType: "equal",
+      });
+
+      // Refresh expenses
+      const expensesRes = await expensesAPI.getAll();
+      setExpenses(expensesRes.expenses || []);
+      
+      setAddExpenseOpen(false);
+      setNewExpense({ description: "", amount: "", category: "", groupId: "" });
+    } catch (error) {
+      console.error("Error adding expense:", error);
+      alert(error.message || "Failed to add expense");
+    }
   };
 
   const handleEditExpense = (expense) => {
     console.log("Editing expense:", expense);
+    // TODO: Implement edit functionality
   };
 
-  const handleDeleteExpense = (expense) => {
-    console.log("Deleting expense:", expense);
+  const handleDeleteExpense = async (expense) => {
+    if (!confirm("Are you sure you want to delete this expense?")) return;
+
+    try {
+      await expensesAPI.delete(expense.id);
+      setExpenses((prev) => prev.filter((e) => e.id !== expense.id));
+    } catch (error) {
+      console.error("Error deleting expense:", error);
+      alert(error.message || "Failed to delete expense");
+    }
   };
 
   const ExpenseRow = ({ expense }) => {
-    const payer = getUserById(expense.paidBy);
-    const group = getGroupById(expense.groupId);
+    const payer = expense.payer || expense.paidBy;
+    const payerName = payer?.firstName 
+      ? `${payer.firstName} ${payer.lastName || ""}`.trim()
+      : payer?.name || "Unknown";
+    const group = expense.group;
     const category = getCategoryById(expense.category);
+    const shareCount = expense.shares?.length || 1;
+    const userShare = user ? expense.shares?.find((s) => s.userId === parseInt(user.id)) : null;
+    const paidById = typeof payer === 'object' ? payer.id : payer;
+    const isUserPaid = user && paidById === parseInt(user.id);
 
     return (
       <div className="flex items-center gap-4 p-4 rounded-lg hover:bg-gray-50 border-b last:border-b-0">
@@ -135,36 +195,36 @@ function ExpensesPage() {
             {expense.description}
           </p>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-xs text-gray-500">{payer?.name} paid</span>
+            <span className="text-xs text-gray-500">{payerName} paid</span>
             <span className="text-xs text-gray-300">•</span>
             <Link
               to={`/groups/${expense.groupId}`}
               className="text-xs text-primary hover:underline"
             >
-              {group?.name}
+              {group?.name || "Unknown Group"}
             </Link>
             <span className="text-xs text-gray-300">•</span>
             <span className="text-xs text-gray-500">
-              {formatDate(expense.date)}
+              {formatDate(expense.date || expense.createdAt)}
             </span>
           </div>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-sm font-semibold">{formatCurrency(expense.amount)}</p>
+          <p className="text-sm font-semibold">{formatCurrency(parseFloat(expense.amount))}</p>
           <p className="text-xs text-gray-500">
-            {formatCurrency(expense.amount / expense.splitBetween.length)}/person
+            {formatCurrency(parseFloat(expense.amount) / shareCount)}/person
           </p>
         </div>
         <div className="shrink-0">
           {expense.settled ? (
             <Badge variant="success">Settled</Badge>
-          ) : user && expense.paidBy === user.id ? (
+          ) : isUserPaid ? (
             <Badge variant="default">You paid</Badge>
-          ) : (
+          ) : userShare ? (
             <Badge variant="secondary">
-              You owe {formatCurrency(expense.amount / expense.splitBetween.length)}
+              You owe {formatCurrency(parseFloat(userShare.shareAmount))}
             </Badge>
-          )}
+          ) : null}
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -252,7 +312,7 @@ function ExpensesPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {groups.map((group) => (
-                        <SelectItem key={group.id} value={group.id}>
+                        <SelectItem key={group.id} value={group.id.toString()}>
                           {group.name}
                         </SelectItem>
                       ))}
@@ -367,7 +427,7 @@ function ExpensesPage() {
                 <SelectContent>
                   <SelectItem value="all">All Groups</SelectItem>
                   {groups.map((group) => (
-                    <SelectItem key={group.id} value={group.id}>
+                    <SelectItem key={group.id} value={group.id.toString()}>
                       {group.name}
                     </SelectItem>
                   ))}
@@ -405,7 +465,11 @@ function ExpensesPage() {
           <TabsContent value="pending">
             <Card>
               <CardContent className="p-0">
-                {pendingExpenses.length > 0 ? (
+                {loading ? (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500">Loading...</p>
+                  </div>
+                ) : pendingExpenses.length > 0 ? (
                   <div>
                     {pendingExpenses.map((expense) => (
                       <ExpenseRow key={expense.id} expense={expense} />
@@ -424,7 +488,11 @@ function ExpensesPage() {
           <TabsContent value="settled">
             <Card>
               <CardContent className="p-0">
-                {settledExpenses.length > 0 ? (
+                {loading ? (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500">Loading...</p>
+                  </div>
+                ) : settledExpenses.length > 0 ? (
                   <div>
                     {settledExpenses.map((expense) => (
                       <ExpenseRow key={expense.id} expense={expense} />
@@ -443,7 +511,11 @@ function ExpensesPage() {
           <TabsContent value="all">
             <Card>
               <CardContent className="p-0">
-                {filteredExpenses.length > 0 ? (
+                {loading ? (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500">Loading...</p>
+                  </div>
+                ) : filteredExpenses.length > 0 ? (
                   <div>
                     {filteredExpenses.map((expense) => (
                       <ExpenseRow key={expense.id} expense={expense} />

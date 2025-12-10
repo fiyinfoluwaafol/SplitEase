@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import Layout from "@/components/Layout/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,12 +17,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Users, ArrowRight, Calendar } from "lucide-react";
-import { groups, getUserById, getExpensesByGroup } from "@/data/mockData";
+import { groupsAPI, expensesAPI } from "@/lib/api";
+import { useUser } from "@/contexts/UserContext";
 
 function GroupsPage() {
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupDescription, setNewGroupDescription] = useState("");
+  const [groups, setGroups] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useUser();
 
   const getInitials = (name) => {
     return name
@@ -47,11 +51,40 @@ function GroupsPage() {
     });
   };
 
-  const handleCreateGroup = () => {
-    console.log("Creating group:", { name: newGroupName, description: newGroupDescription });
-    setCreateGroupOpen(false);
-    setNewGroupName("");
-    setNewGroupDescription("");
+  useEffect(() => {
+    const fetchGroups = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        const result = await groupsAPI.getAll();
+        setGroups(result.groups || []);
+      } catch (error) {
+        console.error("Error fetching groups:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGroups();
+  }, [user]);
+
+  const handleCreateGroup = async () => {
+    if (!newGroupName.trim()) return;
+
+    try {
+      const result = await groupsAPI.create({ 
+        name: newGroupName, 
+        description: newGroupDescription || undefined 
+      });
+      setGroups((prev) => [result.group, ...prev]);
+      setCreateGroupOpen(false);
+      setNewGroupName("");
+      setNewGroupDescription("");
+    } catch (error) {
+      console.error("Error creating group:", error);
+      alert(error.message || "Failed to create group");
+    }
   };
 
   return (
@@ -112,12 +145,17 @@ function GroupsPage() {
         </div>
 
         {/* Groups Grid */}
-        {groups.length > 0 ? (
+        {loading ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <p className="text-gray-500">Loading groups...</p>
+            </CardContent>
+          </Card>
+        ) : groups.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {groups.map((group) => {
-              const memberUsers = group.members.map(getUserById).filter(Boolean);
-              const groupExpenses = getExpensesByGroup(group.id);
-              const totalSpent = groupExpenses.reduce((sum, e) => sum + e.amount, 0);
+              const memberUsers = (group.members || []).map((m) => m.user || m).filter(Boolean);
+              const totalSpent = parseFloat(group.totalExpenses || 0);
 
               return (
                 <Link key={group.id} to={`/groups/${group.id}`}>
@@ -128,7 +166,7 @@ function GroupsPage() {
                           <Users className="w-6 h-6 text-primary" />
                         </div>
                         <Badge variant="secondary">
-                          {group.members.length} members
+                          {memberUsers.length} members
                         </Badge>
                       </div>
                       <CardTitle className="text-lg mt-3">{group.name}</CardTitle>
@@ -143,16 +181,21 @@ function GroupsPage() {
                         {/* Members */}
                         <div className="flex items-center justify-between">
                           <div className="flex -space-x-2">
-                            {memberUsers.slice(0, 4).map((member) => (
-                              <Avatar
-                                key={member.id}
-                                className="h-8 w-8 border-2 border-white"
-                              >
-                                <AvatarFallback className="text-xs bg-gray-200">
-                                  {getInitials(member.name)}
-                                </AvatarFallback>
-                              </Avatar>
-                            ))}
+                            {memberUsers.slice(0, 4).map((member) => {
+                              const memberName = member.firstName 
+                                ? `${member.firstName} ${member.lastName || ""}`.trim()
+                                : member.name || "Unknown";
+                              return (
+                                <Avatar
+                                  key={member.id}
+                                  className="h-8 w-8 border-2 border-white"
+                                >
+                                  <AvatarFallback className="text-xs bg-gray-200">
+                                    {getInitials(memberName)}
+                                  </AvatarFallback>
+                                </Avatar>
+                              );
+                            })}
                             {memberUsers.length > 4 && (
                               <div className="h-8 w-8 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center">
                                 <span className="text-xs text-gray-600">
