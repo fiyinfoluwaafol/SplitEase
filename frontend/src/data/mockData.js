@@ -225,23 +225,28 @@ export const getExpensesByGroup = (groupId) =>
 export const getCategoryById = (id) => categories.find((c) => c.id === id);
 
 // Calculate balances for current user
-export const calculateBalances = () => {
+export const calculateBalances = (user = currentUser) => {
+  if (!user) return { youOwe: 0, youAreOwed: 0, totalBalance: 0 };
+  
   let youOwe = 0;
   let youAreOwed = 0;
+  const userId = user.id.toString();
 
   expenses.forEach((expense) => {
     if (expense.settled) return;
 
     const share = expense.amount / expense.splitBetween.length;
+    const paidBy = expense.paidBy.toString();
+    const splitBetween = expense.splitBetween.map(id => id.toString());
 
-    if (expense.paidBy === currentUser.id) {
+    if (paidBy === userId) {
       // Current user paid, others owe them
-      expense.splitBetween.forEach((userId) => {
-        if (userId !== currentUser.id) {
+      splitBetween.forEach((userIdInSplit) => {
+        if (userIdInSplit !== userId) {
           youAreOwed += share;
         }
       });
-    } else if (expense.splitBetween.includes(currentUser.id)) {
+    } else if (splitBetween.includes(userId)) {
       // Someone else paid, current user owes them
       youOwe += share;
     }
@@ -249,9 +254,11 @@ export const calculateBalances = () => {
 
   // Subtract payments made
   payments.forEach((payment) => {
-    if (payment.from === currentUser.id) {
+    const from = payment.from.toString();
+    const to = payment.to.toString();
+    if (from === userId) {
       youOwe -= payment.amount;
-    } else if (payment.to === currentUser.id) {
+    } else if (to === userId) {
       youAreOwed -= payment.amount;
     }
   });
@@ -264,13 +271,16 @@ export const calculateBalances = () => {
 };
 
 // Get detailed balances (who owes whom)
-export const getDetailedBalances = () => {
+export const getDetailedBalances = (user = currentUser) => {
+  if (!user) return [];
+  
   const balances = {};
+  const userId = user.id.toString();
 
   // Initialize balances for all users
-  users.forEach((user) => {
-    if (user.id !== currentUser.id) {
-      balances[user.id] = 0;
+  users.forEach((u) => {
+    if (u.id.toString() !== userId) {
+      balances[u.id.toString()] = 0;
     }
   });
 
@@ -279,31 +289,35 @@ export const getDetailedBalances = () => {
     if (expense.settled) return;
 
     const share = expense.amount / expense.splitBetween.length;
+    const paidBy = expense.paidBy.toString();
+    const splitBetween = expense.splitBetween.map(id => id.toString());
 
-    if (expense.paidBy === currentUser.id) {
-      expense.splitBetween.forEach((userId) => {
-        if (userId !== currentUser.id) {
-          balances[userId] = (balances[userId] || 0) + share;
+    if (paidBy === userId) {
+      splitBetween.forEach((userIdInSplit) => {
+        if (userIdInSplit !== userId) {
+          balances[userIdInSplit] = (balances[userIdInSplit] || 0) + share;
         }
       });
-    } else if (expense.splitBetween.includes(currentUser.id)) {
-      balances[expense.paidBy] = (balances[expense.paidBy] || 0) - share;
+    } else if (splitBetween.includes(userId)) {
+      balances[paidBy] = (balances[paidBy] || 0) - share;
     }
   });
 
   // Adjust for payments
   payments.forEach((payment) => {
-    if (payment.from === currentUser.id) {
-      balances[payment.to] = (balances[payment.to] || 0) + payment.amount;
-    } else if (payment.to === currentUser.id) {
-      balances[payment.from] = (balances[payment.from] || 0) - payment.amount;
+    const from = payment.from.toString();
+    const to = payment.to.toString();
+    if (from === userId) {
+      balances[to] = (balances[to] || 0) + payment.amount;
+    } else if (to === userId) {
+      balances[from] = (balances[from] || 0) - payment.amount;
     }
   });
 
   return Object.entries(balances)
     .filter(([_, amount]) => Math.abs(amount) > 0.01)
-    .map(([userId, amount]) => ({
-      user: getUserById(userId),
+    .map(([userIdStr, amount]) => ({
+      user: getUserById(userIdStr),
       amount: amount,
       type: amount > 0 ? "owed" : "owes",
     }));

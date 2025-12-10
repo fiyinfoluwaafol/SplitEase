@@ -22,7 +22,7 @@ import {
   Settings,
   User,
 } from "lucide-react";
-import { currentUser } from "@/data/mockData";
+import { useUser } from "@/contexts/UserContext";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -36,6 +36,7 @@ function Layout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const backendUrlAccess = import.meta.env.VITE_BACKEND_ADDRESS;
+  const { user } = useUser();
 
   const handleLogout = async () => {
     try {
@@ -128,15 +129,15 @@ function Layout({ children }) {
             <div className="flex items-center gap-3 px-3 py-2">
               <Avatar className="h-9 w-9">
                 <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                  {getInitials(currentUser.name)}
+                  {user ? getInitials(user.name) : "U"}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">
-                  {currentUser.name}
+                  {user?.name || "Loading..."}
                 </p>
                 <p className="text-xs text-gray-500 truncate">
-                  {currentUser.email}
+                  {user?.email || ""}
                 </p>
               </div>
             </div>
@@ -164,7 +165,7 @@ function Layout({ children }) {
                 <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                   <Avatar className="h-9 w-9">
                     <AvatarFallback className="bg-primary/10 text-primary">
-                      {getInitials(currentUser.name)}
+                      {user ? getInitials(user.name) : "U"}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
@@ -173,10 +174,10 @@ function Layout({ children }) {
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">
-                      {currentUser.name}
+                      {user?.name || "Loading..."}
                     </p>
                     <p className="text-xs leading-none text-muted-foreground">
-                      {currentUser.email}
+                      {user?.email || ""}
                     </p>
                   </div>
                 </DropdownMenuLabel>

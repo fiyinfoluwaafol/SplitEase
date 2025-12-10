@@ -35,17 +35,18 @@ import {
   payments,
   getUserById,
   getGroupById,
-  currentUser,
 } from "@/data/mockData";
+import { useUser } from "@/contexts/UserContext";
 
 function SettlePage() {
+  const { user } = useUser();
   const [settleOpen, setSettleOpen] = useState(false);
   const [selectedBalance, setSelectedBalance] = useState(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
 
-  const balances = calculateBalances();
-  const detailedBalances = getDetailedBalances();
+  const balances = calculateBalances(user);
+  const detailedBalances = getDetailedBalances(user);
 
   const getInitials = (name) => {
     return name
@@ -302,7 +303,7 @@ function SettlePage() {
                       const from = getUserById(payment.from);
                       const to = getUserById(payment.to);
                       const group = getGroupById(payment.groupId);
-                      const isFromCurrentUser = payment.from === currentUser.id;
+                      const isFromCurrentUser = user && payment.from === user.id;
 
                       return (
                         <div
@@ -325,7 +326,7 @@ function SettlePage() {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900">
                               {isFromCurrentUser ? "You" : from?.name} paid{" "}
-                              {payment.to === currentUser.id ? "you" : to?.name}
+                              {user && payment.to === user.id ? "you" : to?.name}
                             </p>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-xs text-gray-500">
@@ -389,7 +390,7 @@ function SettlePage() {
               <div className="flex items-center gap-4 p-4 rounded-lg bg-gray-50">
                 <Avatar className="h-12 w-12">
                   <AvatarFallback className="bg-primary/10 text-primary">
-                    {getInitials(currentUser.name)}
+                    {user ? getInitials(user.name) : "U"}
                   </AvatarFallback>
                 </Avatar>
                 <ArrowRight className="w-5 h-5 text-gray-400" />

@@ -51,10 +51,11 @@ import {
   getUserById,
   getGroupById,
   getCategoryById,
-  currentUser,
 } from "@/data/mockData";
+import { useUser } from "@/contexts/UserContext";
 
 function ExpensesPage() {
+  const { user } = useUser();
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterGroup, setFilterGroup] = useState("all");
@@ -99,7 +100,7 @@ function ExpensesPage() {
   // Calculate totals
   const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
   const yourShare = expenses.reduce((sum, e) => {
-    if (e.splitBetween.includes(currentUser.id)) {
+    if (user && e.splitBetween.includes(user.id)) {
       return sum + e.amount / e.splitBetween.length;
     }
     return sum;
@@ -157,7 +158,7 @@ function ExpensesPage() {
         <div className="shrink-0">
           {expense.settled ? (
             <Badge variant="success">Settled</Badge>
-          ) : expense.paidBy === currentUser.id ? (
+          ) : user && expense.paidBy === user.id ? (
             <Badge variant="default">You paid</Badge>
           ) : (
             <Badge variant="secondary">

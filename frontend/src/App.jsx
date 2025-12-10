@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './App.css'
+import { UserProvider } from './contexts/UserContext';
 
 // Importing page components
 import UserAuthPage from './pages/UserAuthPage/UserAuthPage';
@@ -13,15 +14,17 @@ import NotFoundPage from './pages/NotFoundPage/NotFoundPage';
 function App() {
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<UserAuthPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/groups" element={<GroupsPage />} />
-        <Route path="/groups/:id" element={<GroupDetailPage />} />
-        <Route path="/expenses" element={<ExpensesPage />} />
-        <Route path="/settle" element={<SettlePage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+      <UserProvider>
+        <Routes>
+          <Route path="/" element={<UserAuthPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/groups" element={<GroupsPage />} />
+          <Route path="/groups/:id" element={<GroupDetailPage />} />
+          <Route path="/expenses" element={<ExpensesPage />} />
+          <Route path="/settle" element={<SettlePage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </UserProvider>
     </Router>
   )
 }

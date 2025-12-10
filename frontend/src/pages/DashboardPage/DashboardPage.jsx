@@ -31,17 +31,20 @@ import {
   getRecentActivity,
   getUserById,
   getCategoryById,
-  currentUser,
 } from "@/data/mockData";
+import { useUser } from "@/contexts/UserContext";
 
 function DashboardPage() {
   const backendUrlAccess = import.meta.env.VITE_BACKEND_ADDRESS;
   const navigate = useNavigate();
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
+  const { user } = useUser();
 
-  const balances = calculateBalances();
+  const balances = calculateBalances(user);
   const recentActivity = getRecentActivity(5);
+
+  const { refreshUser } = useUser();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -53,6 +56,9 @@ function DashboardPage() {
 
         if (!response.ok) {
           navigate("/");
+        } else {
+          // Refresh user data after successful auth check
+          refreshUser();
         }
       } catch (error) {
         console.error("Error checking authentication:", error);
@@ -61,7 +67,7 @@ function DashboardPage() {
     };
 
     checkAuth();
-  }, [backendUrlAccess, navigate]);
+  }, [backendUrlAccess, navigate, refreshUser]);
 
   const getInitials = (name) => {
     return name
@@ -101,7 +107,7 @@ function DashboardPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-gray-500 mt-1">
-              Welcome back, {currentUser.name.split(" ")[0]}!
+              Welcome back, {user?.firstName || user?.name?.split(" ")[0] || "there"}!
             </p>
           </div>
           <div className="flex gap-3">
@@ -248,7 +254,7 @@ function DashboardPage() {
                             <p className="text-sm font-semibold text-gray-900">
                               {formatCurrency(expense.amount)}
                             </p>
-                            {expense.paidBy === currentUser.id ? (
+                            {user && expense.paidBy === user.id ? (
                               <Badge variant="success" className="text-xs">
                                 You paid
                               </Badge>

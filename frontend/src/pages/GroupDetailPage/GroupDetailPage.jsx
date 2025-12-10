@@ -44,10 +44,11 @@ import {
   getExpensesByGroup,
   getCategoryById,
   categories,
-  currentUser,
 } from "@/data/mockData";
+import { useUser } from "@/contexts/UserContext";
 
 function GroupDetailPage() {
+  const { user } = useUser();
   const { id } = useParams();
   const group = getGroupById(id);
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
@@ -421,7 +422,7 @@ function GroupDetailPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900">
                           {member.name}
-                          {member.id === currentUser.id && (
+                          {user && member.id === user.id && (
                             <span className="text-gray-500 ml-1">(You)</span>
                           )}
                         </p>
