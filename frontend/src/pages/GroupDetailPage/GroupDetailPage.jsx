@@ -37,7 +37,6 @@ import {
   Receipt,
   Users,
   Settings,
-  SlidersHorizontal,
 } from "lucide-react";
 import { groupsAPI, expensesAPI, balancesAPI, categories, getCategoryById } from "@/lib/api";
 import { useUser } from "@/contexts/UserContext";
@@ -229,13 +228,6 @@ function GroupDetailPage() {
             )}
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="gap-2" asChild>
-              <Link to={`/groups/${id}/allocate`}>
-                <SlidersHorizontal className="w-4 h-4" />
-                <span className="hidden sm:inline">Allocate</span>
-              </Link>
-            </Button>
-
             <Dialog open={inviteMemberOpen} onOpenChange={setInviteMemberOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="gap-2">
