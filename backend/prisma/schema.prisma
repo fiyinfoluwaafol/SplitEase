@@ -27,6 +27,7 @@ model User {
   memberships   GroupMember[]
   paidExpenses  Expense[]      @relation("ExpensePayer")
   expenseShares ExpenseShare[]
+  itemAllocations ItemAllocation[]
   paymentsSent  Payment[]      @relation("PaymentFrom")
   paymentsReceived Payment[]   @relation("PaymentTo")
 }
@@ -63,11 +64,12 @@ model Expense {
   category    String         @default("other")
   groupId     Int
   paidBy      Int
-  splitType   String         @default("equal") // "equal" | "custom"
+  splitType   String         @default("equal") // "equal" | "custom" | "itemized"
   settled     Boolean        @default(false)
   group       Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
   payer       User           @relation("ExpensePayer", fields: [paidBy], references: [id])
   shares      ExpenseShare[]
+  items       ExpenseItem[]
   date        DateTime       @default(now())
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
@@ -96,4 +98,25 @@ model Payment {
   group      Group?   @relation(fields: [groupId], references: [id])
   date       DateTime @default(now())
   createdAt  DateTime @default(now())
+}
+
+model ExpenseItem {
+  id          Int               @id @default(autoincrement())
+  name        String
+  price       Decimal           @db.Decimal(10, 2)
+  quantity    Int               @default(1)
+  expenseId   Int
+  expense     Expense           @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  allocations ItemAllocation[]
+  createdAt   DateTime          @default(now())
+}
+
+model ItemAllocation {
+  id        Int         @id @default(autoincrement())
+  itemId    Int
+  userId    Int
+  item      ExpenseItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id])
+
+  @@unique([itemId, userId])
 }

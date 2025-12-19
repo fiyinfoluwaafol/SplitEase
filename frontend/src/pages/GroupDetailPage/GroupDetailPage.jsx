@@ -24,22 +24,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Plus,
   UserPlus,
   ArrowLeft,
   Receipt,
   Users,
   Settings,
+  Package,
 } from "lucide-react";
-import { groupsAPI, expensesAPI, balancesAPI, categories, getCategoryById } from "@/lib/api";
+import { groupsAPI, expensesAPI, balancesAPI, getCategoryById } from "@/lib/api";
 import { useUser } from "@/contexts/UserContext";
+import AddExpenseDialog from "@/components/AddExpenseDialog/AddExpenseDialog";
 
 function GroupDetailPage() {
   const { user } = useUser();
@@ -50,11 +45,6 @@ function GroupDetailPage() {
   const [loading, setLoading] = useState(true);
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [inviteMemberOpen, setInviteMemberOpen] = useState(false);
-  const [newExpense, setNewExpense] = useState({
-    description: "",
-    amount: "",
-    category: "",
-  });
   const [inviteEmail, setInviteEmail] = useState("");
 
   useEffect(() => {
@@ -169,29 +159,16 @@ function GroupDetailPage() {
 
   const memberBalances = calculateMemberBalances();
 
-  const handleAddExpense = async () => {
-    if (!newExpense.description || !newExpense.amount) return;
-
+  const handleAddExpense = async (expenseData) => {
     try {
-      const memberIds = memberUsers.map((m) => m.id);
-      await expensesAPI.create({
-        description: newExpense.description,
-        amount: parseFloat(newExpense.amount),
-        category: newExpense.category || "other",
-        groupId: parseInt(id),
-        splitBetween: memberIds,
-        splitType: "equal",
-      });
+      await expensesAPI.create(expenseData);
 
       // Refresh expenses
       const expensesRes = await expensesAPI.getAll(id);
       setExpenses(expensesRes.expenses || []);
-      
-      setAddExpenseOpen(false);
-      setNewExpense({ description: "", amount: "", category: "" });
     } catch (error) {
       console.error("Error adding expense:", error);
-      alert(error.message || "Failed to add expense");
+      throw error;
     }
   };
 
@@ -268,81 +245,17 @@ function GroupDetailPage() {
               </DialogContent>
             </Dialog>
 
-            <Dialog open={addExpenseOpen} onOpenChange={setAddExpenseOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Add Expense</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add Expense</DialogTitle>
-                  <DialogDescription>
-                    Add a new expense to split with the group.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Input
-                      id="description"
-                      placeholder="What was this expense for?"
-                      value={newExpense.description}
-                      onChange={(e) =>
-                        setNewExpense({ ...newExpense, description: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="amount">Amount</Label>
-                    <Input
-                      id="amount"
-                      type="number"
-                      placeholder="0.00"
-                      value={newExpense.amount}
-                      onChange={(e) =>
-                        setNewExpense({ ...newExpense, amount: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="category">Category</Label>
-                    <Select
-                      value={newExpense.category}
-                      onValueChange={(value) =>
-                        setNewExpense({ ...newExpense, category: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.icon} {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setAddExpenseOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleAddExpense}
-                    disabled={!newExpense.description || !newExpense.amount}
-                  >
-                    Add Expense
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Button className="gap-2" onClick={() => setAddExpenseOpen(true)}>
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Add Expense</span>
+            </Button>
+            <AddExpenseDialog
+              open={addExpenseOpen}
+              onOpenChange={setAddExpenseOpen}
+              onSubmit={handleAddExpense}
+              groups={group ? [group] : []}
+              selectedGroupId={parseInt(id)}
+            />
           </div>
         </div>
 
@@ -416,6 +329,8 @@ function GroupDetailPage() {
                         : payer?.name || "Unknown";
                       const category = getCategoryById(expense.category);
                       const shareCount = expense.shares?.length || 1;
+                      const itemCount = expense.items?.length || 0;
+                      const isItemized = expense.splitType === 'itemized' || itemCount > 0;
                       return (
                         <div
                           key={expense.id}
@@ -425,9 +340,17 @@ function GroupDetailPage() {
                             {category?.icon || "📦"}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900">
-                              {expense.description}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-gray-900">
+                                {expense.description}
+                              </p>
+                              {isItemized && (
+                                <Badge variant="outline" className="text-xs gap-1">
+                                  <Package className="w-3 h-3" />
+                                  {itemCount} items
+                                </Badge>
+                              )}
+                            </div>
                             <p className="text-xs text-gray-500">
                               {payerName} paid • {formatDate(expense.date || expense.createdAt)}
                             </p>
@@ -437,7 +360,7 @@ function GroupDetailPage() {
                               {formatCurrency(parseFloat(expense.amount))}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {formatCurrency(parseFloat(expense.amount) / shareCount)}/person
+                              {shareCount > 0 ? formatCurrency(parseFloat(expense.amount) / shareCount) : formatCurrency(0)}/person
                             </p>
                           </div>
                           {expense.settled ? (

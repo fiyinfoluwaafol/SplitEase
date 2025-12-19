@@ -11,17 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -37,6 +27,7 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
+  Package,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -46,6 +37,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { expensesAPI, groupsAPI, categories, getCategoryById } from "@/lib/api";
 import { useUser } from "@/contexts/UserContext";
+import AddExpenseDialog from "@/components/AddExpenseDialog/AddExpenseDialog";
 
 function ExpensesPage() {
   const { user } = useUser();
@@ -56,12 +48,6 @@ function ExpensesPage() {
   const [expenses, setExpenses] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [newExpense, setNewExpense] = useState({
-    description: "",
-    amount: "",
-    category: "",
-    groupId: "",
-  });
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat("en-US", {
@@ -127,32 +113,16 @@ function ExpensesPage() {
     return sum;
   }, 0);
 
-  const handleAddExpense = async () => {
-    if (!newExpense.description || !newExpense.amount || !newExpense.groupId) return;
-
+  const handleAddExpense = async (expenseData) => {
     try {
-      // Get group members for splitBetween
-      const group = groups.find((g) => g.id === parseInt(newExpense.groupId));
-      const memberIds = (group?.members || []).map((m) => m.userId || m.user?.id || m.id);
-
-      await expensesAPI.create({
-        description: newExpense.description,
-        amount: parseFloat(newExpense.amount),
-        category: newExpense.category || "other",
-        groupId: parseInt(newExpense.groupId),
-        splitBetween: memberIds,
-        splitType: "equal",
-      });
+      await expensesAPI.create(expenseData);
 
       // Refresh expenses
       const expensesRes = await expensesAPI.getAll();
       setExpenses(expensesRes.expenses || []);
-      
-      setAddExpenseOpen(false);
-      setNewExpense({ description: "", amount: "", category: "", groupId: "" });
     } catch (error) {
       console.error("Error adding expense:", error);
-      alert(error.message || "Failed to add expense");
+      throw error;
     }
   };
 
@@ -184,6 +154,8 @@ function ExpensesPage() {
     const userShare = user ? expense.shares?.find((s) => s.userId === parseInt(user.id)) : null;
     const paidById = typeof payer === 'object' ? payer.id : payer;
     const isUserPaid = user && paidById === parseInt(user.id);
+    const itemCount = expense.items?.length || 0;
+    const isItemized = expense.splitType === 'itemized' || itemCount > 0;
 
     return (
       <div className="flex items-center gap-4 p-4 rounded-lg hover:bg-gray-50 border-b last:border-b-0">
@@ -191,9 +163,17 @@ function ExpensesPage() {
           {category?.icon || "📦"}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-900 truncate">
-            {expense.description}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-gray-900 truncate">
+              {expense.description}
+            </p>
+            {isItemized && (
+              <Badge variant="outline" className="text-xs gap-1">
+                <Package className="w-3 h-3" />
+                {itemCount} items
+              </Badge>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-0.5">
             <span className="text-xs text-gray-500">{payerName} paid</span>
             <span className="text-xs text-gray-300">•</span>
@@ -212,7 +192,7 @@ function ExpensesPage() {
         <div className="text-right shrink-0">
           <p className="text-sm font-semibold">{formatCurrency(parseFloat(expense.amount))}</p>
           <p className="text-xs text-gray-500">
-            {formatCurrency(parseFloat(expense.amount) / shareCount)}/person
+            {shareCount > 0 ? formatCurrency(parseFloat(expense.amount) / shareCount) : formatCurrency(0)}/person
           </p>
         </div>
         <div className="shrink-0">
@@ -261,105 +241,16 @@ function ExpensesPage() {
               Track and manage all your shared expenses
             </p>
           </div>
-          <Dialog open={addExpenseOpen} onOpenChange={setAddExpenseOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="w-4 h-4" />
-                Add Expense
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Expense</DialogTitle>
-                <DialogDescription>
-                  Add an expense to split with your group.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Input
-                    id="description"
-                    placeholder="What was this expense for?"
-                    value={newExpense.description}
-                    onChange={(e) =>
-                      setNewExpense({ ...newExpense, description: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="amount">Amount</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    placeholder="0.00"
-                    value={newExpense.amount}
-                    onChange={(e) =>
-                      setNewExpense({ ...newExpense, amount: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="group">Group</Label>
-                  <Select
-                    value={newExpense.groupId}
-                    onValueChange={(value) =>
-                      setNewExpense({ ...newExpense, groupId: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {groups.map((group) => (
-                        <SelectItem key={group.id} value={group.id.toString()}>
-                          {group.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="category">Category</Label>
-                  <Select
-                    value={newExpense.category}
-                    onValueChange={(value) =>
-                      setNewExpense({ ...newExpense, category: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.icon} {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setAddExpenseOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleAddExpense}
-                  disabled={
-                    !newExpense.description ||
-                    !newExpense.amount ||
-                    !newExpense.groupId
-                  }
-                >
-                  Add Expense
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button className="gap-2" onClick={() => setAddExpenseOpen(true)}>
+            <Plus className="w-4 h-4" />
+            Add Expense
+          </Button>
+          <AddExpenseDialog
+            open={addExpenseOpen}
+            onOpenChange={setAddExpenseOpen}
+            onSubmit={handleAddExpense}
+            groups={groups}
+          />
         </div>
 
         {/* Stats Cards */}

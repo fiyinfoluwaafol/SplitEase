@@ -62,6 +62,10 @@ export const expensesAPI = {
     method: 'POST',
     body: JSON.stringify(data),
   }),
+  createWithItems: (data) => apiCall('/expenses', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
   update: (id, data) => apiCall(`/expenses/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -72,6 +76,18 @@ export const expensesAPI = {
   settle: (id, settled = true) => apiCall(`/expenses/${id}/settle`, {
     method: 'PATCH',
     body: JSON.stringify({ settled }),
+  }),
+  // Item management
+  addItem: (expenseId, itemData) => apiCall(`/expenses/${expenseId}/items`, {
+    method: 'POST',
+    body: JSON.stringify(itemData),
+  }),
+  updateItem: (expenseId, itemId, itemData) => apiCall(`/expenses/${expenseId}/items/${itemId}`, {
+    method: 'PUT',
+    body: JSON.stringify(itemData),
+  }),
+  deleteItem: (expenseId, itemId) => apiCall(`/expenses/${expenseId}/items/${itemId}`, {
+    method: 'DELETE',
   }),
 };
 
